@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper to get current user document
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Helper to check admin role (supports Auth Custom Claims 'role: admin', 'admin: true', Firestore user doc, and root emails)
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'admin' ||
+        request.auth.token.admin == true ||
+        getUserData().role == 'admin' ||
+        request.auth.token.email == 'ianzinhopaterraoficial@gmail.com' ||
+        request.auth.token.email == 'vmpveiculos@gmail.com' ||
+        request.auth.token.email == 'marcospaterra31@gmail.com' ||
+        request.auth.token.email == 'admin@mundoazul.com.br' ||
+        request.auth.token.email == 'Marcospaterra@ianpaterra' ||
+        request.auth.token.email == 'marcospaterra@ianpaterra' ||
+        request.auth.token.email == 'Marcospaterra@ianpaterra.com' ||
+        request.auth.token.email == 'marcospaterra@ianpaterra.com' ||
+        request.auth.token.email.matches('(?i).*marcospaterra.*')
+      );
+    }
+
+    function isParent() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'parent' ||
+        getUserData().role == 'parent' || 
+        isAdmin()
+      );
+    }
+
+    function isTherapist() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'therapist' ||
+        getUserData().role == 'therapist' || 
+        isAdmin()
+      );
+    }
+
+    function isSchool() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'school' ||
+        getUserData().role == 'school' || 
+        isAdmin()
+      );
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Children Collection
+    match /children/{childId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || (isParent() && (request.resource.data.parents != null || resource.data.parents != null));
+      
+      // Sub-links
+      match /professionals/{profId} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin();
+      }
+      match /parents/{parentId} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin();
+      }
+      match /schools/{schoolId} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin();
+      }
+    }
+
+    // Sessions & Atendimentos
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isTherapist() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Agenda Events
+    match /agenda/{agendaId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Goals & Metas
+    match /goals/{goalId} {
+      allow read: if isAuthenticated();
+      allow write: if isTherapist() || isAdmin() || isParent();
+    }
+
+    // Achievements & Conquistas
+    match /achievements/{achId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // School Records & Observações Escolares
+    match /school_records/{recId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isSchool() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Diary & Mood Records
+    match /diary/{diaryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Documents
+    match /documents/{docId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // Messages / Chat
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.senderId);
+    }
+
+    // Admin Logs
+    match /logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if isAuthenticated();
+    }
+  }
+}

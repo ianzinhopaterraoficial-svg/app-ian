@@ -1,0 +1,6 @@
+{
+  "name": "Meu Mundo Azul — Acompanhamento do Ian",
+  "description": "Plataforma integrada com site público e área de acompanhamento multidisciplinar com autenticação via Firebase para pais, terapeutas e escola.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

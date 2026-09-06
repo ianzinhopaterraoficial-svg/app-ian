@@ -1,0 +1,220 @@
+{
+  "entities": {
+    "Child": {
+      "title": "Child",
+      "description": "Prontuário da criança e dados de identificação.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "parents": { "type": "string" },
+        "birth": { "type": "string" },
+        "birthDateFull": { "type": "string" },
+        "age": { "type": "string" },
+        "diagnosis": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "bloodType": { "type": "string" },
+        "emergencyContact": { "type": "string" },
+        "allergies": { "type": "string" },
+        "schoolName": { "type": "string" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "TherapySession": {
+      "title": "TherapySession",
+      "description": "Registro de atendimento terapêutico e evolução clínica.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "childId": { "type": "string" },
+        "professionalId": { "type": "string" },
+        "professionalName": { "type": "string" },
+        "role": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "goalCategory": { "type": "string" },
+        "activities": { "type": "string" },
+        "evolution": { "type": "string" },
+        "nextGoals": { "type": "string" },
+        "behaviorsObserved": { "type": "string" },
+        "childResponse": { "type": "string" },
+        "difficulties": { "type": "string" },
+        "recommendations": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "Metas do Plano Educacional Individualizado (PEI) e objetivos terapêuticos.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "childId": { "type": "string" },
+        "cat": { "type": "string" },
+        "name": { "type": "string" },
+        "nivel": { "type": "number" },
+        "description": { "type": "string" },
+        "responsibleProf": { "type": "string" },
+        "status": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "Achievement": {
+      "title": "Achievement",
+      "description": "Marcos de desenvolvimento e conquistas comemoradas.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "childId": { "type": "string" },
+        "cat": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "desc": { "type": "string" },
+        "emoji": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "celebrated": { "type": "boolean" }
+      }
+    },
+    "DiaryRecord": {
+      "title": "DiaryRecord",
+      "description": "Diário diário de humor, sono, alimentação e rotina familiar.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "childId": { "type": "string" },
+        "date": { "type": "string" },
+        "humor": { "type": "string" },
+        "sono": { "type": "string" },
+        "alimentacao": { "type": "string" },
+        "atividades": { "type": "string" },
+        "conquista": { "type": "string" },
+        "obs": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "SchoolRecord": {
+      "title": "SchoolRecord",
+      "description": "Registro pedagógico e comunicação da escola.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "childId": { "type": "string" },
+        "date": { "type": "string" },
+        "teacher": { "type": "string" },
+        "atividade": { "type": "string" },
+        "participacao": { "type": "string" },
+        "socializacao": { "type": "string" },
+        "comunicacao": { "type": "string" },
+        "autonomia": { "type": "string" },
+        "conquista": { "type": "string" },
+        "observacoes": { "type": "string" },
+        "recadoPais": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "AgendaEvent": {
+      "title": "AgendaEvent",
+      "description": "Compromissos, terapias e eventos agendados.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "childId": { "type": "string" },
+        "day": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "tipo": { "type": "string" },
+        "who": { "type": "string" },
+        "local": { "type": "string" },
+        "status": { "type": "string" },
+        "completed": { "type": "boolean" }
+      }
+    },
+    "ObservationRecord": {
+      "title": "ObservationRecord",
+      "description": "Observações rápidas multidisciplinares.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "childId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorType": { "type": "string" },
+        "category": { "type": "string" },
+        "text": { "type": "string" },
+        "date": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "DocumentRecord": {
+      "title": "DocumentRecord",
+      "description": "Laudos, relatórios clínicos e PEI.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "childId": { "type": "string" },
+        "nome": { "type": "string" },
+        "cat": { "type": "string" },
+        "data": { "type": "string" },
+        "author": { "type": "string" },
+        "fileUrl": { "type": "string" }
+      }
+    },
+    "SystemUser": {
+      "title": "SystemUser",
+      "description": "Usuários e perfis do sistema.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "roleTitle": { "type": "string" },
+        "permissions": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/children/{childId}": {
+      "schema": "Child",
+      "description": "Coleção do prontuário da criança"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "TherapySession",
+      "description": "Atendimentos e sessões terapêuticas"
+    },
+    "/goals/{goalId}": {
+      "schema": "Goal",
+      "description": "Metas e PEI"
+    },
+    "/achievements/{achId}": {
+      "schema": "Achievement",
+      "description": "Conquistas e marcos"
+    },
+    "/diary/{diaryId}": {
+      "schema": "DiaryRecord",
+      "description": "Diário de rotina e humor"
+    },
+    "/school_records/{recId}": {
+      "schema": "SchoolRecord",
+      "description": "Anotações e recados escolares"
+    },
+    "/agenda/{agendaId}": {
+      "schema": "AgendaEvent",
+      "description": "Agenda de compromissos"
+    },
+    "/observations/{obsId}": {
+      "schema": "ObservationRecord",
+      "description": "Observações multidisciplinares"
+    },
+    "/documents/{docId}": {
+      "schema": "DocumentRecord",
+      "description": "Documentos e laudos"
+    },
+    "/users/{userId}": {
+      "schema": "SystemUser",
+      "description": "Perfis de usuários"
+    }
+  }
+}
