@@ -61,69 +61,56 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Children Collection
+    // Children Collection (Prontuário do Ian)
     match /children/{childId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin() || (isParent() && (request.resource.data.parents != null || resource.data.parents != null));
+      allow write: if isAuthenticated();
       
       // Sub-links
       match /professionals/{profId} {
-        allow read: if isAuthenticated();
-        allow write: if isAdmin();
+        allow read, write: if isAuthenticated();
       }
       match /parents/{parentId} {
-        allow read: if isAuthenticated();
-        allow write: if isAdmin();
+        allow read, write: if isAuthenticated();
       }
       match /schools/{schoolId} {
-        allow read: if isAuthenticated();
-        allow write: if isAdmin();
+        allow read, write: if isAuthenticated();
       }
     }
 
-    // Sessions & Atendimentos
+    // Sessions & Atendimentos Terapêuticos
     match /sessions/{sessionId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isTherapist() || isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if isAuthenticated();
     }
 
     // Agenda Events
     match /agenda/{agendaId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read, write: if isAuthenticated();
     }
 
-    // Goals & Metas
+    // Goals & Metas PEI
     match /goals/{goalId} {
-      allow read: if isAuthenticated();
-      allow write: if isTherapist() || isAdmin() || isParent();
+      allow read, write: if isAuthenticated();
     }
 
     // Achievements & Conquistas
     match /achievements/{achId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read, write: if isAuthenticated();
     }
 
     // School Records & Observações Escolares
     match /school_records/{recId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isSchool() || isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if isAuthenticated();
     }
 
-    // Diary & Mood Records
+    // Diary & Mood Records (Observações da Família e Terapeutas)
     match /diary/{diaryId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read, write: if isAuthenticated();
     }
 
     // Documents
     match /documents/{docId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAdmin();
+      allow read, write: if isAuthenticated();
     }
 
     // Messages / Chat

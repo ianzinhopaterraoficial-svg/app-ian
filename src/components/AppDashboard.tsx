@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   ArrowLeft, 
@@ -24,7 +24,8 @@ import {
   Music,
   Brain,
   Layers,
-  Baby
+  Baby,
+  Cloud
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -36,6 +37,23 @@ import {
   initialAgenda, 
   initialDocuments 
 } from '../lib/firebase';
+import { 
+  seedFirestoreIfEmpty,
+  subscribeToChild,
+  saveChildToFirestore,
+  subscribeToSessions,
+  addSessionToFirestore,
+  subscribeToGoals,
+  addGoalToFirestore,
+  updateGoalLevelInFirestore,
+  subscribeToSchoolRecords,
+  addSchoolRecordToFirestore,
+  subscribeToAgenda,
+  addAgendaEventToFirestore,
+  toggleAgendaInFirestore,
+  subscribeToAchievements,
+  subscribeToDocuments
+} from '../lib/firebaseSync';
 import { Child, TherapySession, Goal, Achievement, DiaryRecord, SchoolRecord, AgendaEvent, DocumentRecord, UserRole } from '../types';
 import { DailyObservationsDiary } from './DailyObservationsDiary';
 
@@ -57,7 +75,54 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   const [achievements, setAchievements] = useState<Achievement[]>(initialAchievements);
   const [schoolRecords, setSchoolRecords] = useState<SchoolRecord[]>(initialSchoolRecords);
   const [agenda, setAgenda] = useState<AgendaEvent[]>(initialAgenda);
-  const [documents] = useState<DocumentRecord[]>(initialDocuments);
+  const [documents, setDocuments] = useState<DocumentRecord[]>(initialDocuments);
+  const [isFirebaseSynced, setIsFirebaseSynced] = useState<boolean>(true);
+
+  // Synchronize with Firebase Firestore on mount
+  useEffect(() => {
+    // Initial seed if documents are missing
+    seedFirestoreIfEmpty();
+
+    // Listeners for live real-time sync across devices
+    const unsubChild = subscribeToChild(initialChildData.id, (data) => {
+      setChildData(data);
+      setIsFirebaseSynced(true);
+    });
+    const unsubSessions = subscribeToSessions(initialChildData.id, (data) => {
+      setSessions(data);
+      setIsFirebaseSynced(true);
+    });
+    const unsubGoals = subscribeToGoals(initialChildData.id, (data) => {
+      setGoals(data);
+      setIsFirebaseSynced(true);
+    });
+    const unsubAchievements = subscribeToAchievements(initialChildData.id, (data) => {
+      setAchievements(data);
+      setIsFirebaseSynced(true);
+    });
+    const unsubSchool = subscribeToSchoolRecords(initialChildData.id, (data) => {
+      setSchoolRecords(data);
+      setIsFirebaseSynced(true);
+    });
+    const unsubAgenda = subscribeToAgenda(initialChildData.id, (data) => {
+      setAgenda(data);
+      setIsFirebaseSynced(true);
+    });
+    const unsubDocs = subscribeToDocuments(initialChildData.id, (data) => {
+      setDocuments(data);
+      setIsFirebaseSynced(true);
+    });
+
+    return () => {
+      unsubChild();
+      unsubSessions();
+      unsubGoals();
+      unsubAchievements();
+      unsubSchool();
+      unsubAgenda();
+      unsubDocs();
+    };
+  }, []);
 
   // Modals for new entries
   const [showSessionModal, setShowSessionModal] = useState(false);
@@ -120,11 +185,16 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   };
 
   // Handlers for adding new items
-  const handleAddSession = (e: React.FormEvent) => {
+  const handleSaveProntuario = async () => {
+    await saveChildToFirestore(childData);
+    setShowEditProntuario(false);
+    triggerCelebration('Prontuário atualizado no Firestore');
+  };
+
+  const handleAddSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSession.activities || !newSession.evolution) return;
-    const sessionItem: TherapySession = {
-      id: `sess-${Date.now()}`,
+    const sessionPayload = {
       childId: childData.id,
       professionalId: systemUser?.id || 'prof-01',
       professionalName: newSession.professionalName,
@@ -141,48 +211,42 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
       recommendations: newSession.recommendations,
       createdAt: new Date().toISOString()
     };
-    setSessions([sessionItem, ...sessions]);
+    const saved = await addSessionToFirestore(sessionPayload);
+    setSessions(prev => [saved, ...prev.filter(s => s.id !== saved.id)]);
     setShowSessionModal(false);
-    triggerCelebration('Sessão registrada');
+    triggerCelebration('Sessão registrada no Firestore');
   };
 
-  const handleAddGoal = (e: React.FormEvent) => {
+  const handleAddGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGoal.name) return;
-    const goalItem: Goal = {
-      id: `goal-${Date.now()}`,
+    const goalPayload = {
       childId: childData.id,
       name: newGoal.name,
       cat: newGoal.cat,
       nivel: Number(newGoal.nivel),
       description: newGoal.description,
       responsibleProf: newGoal.responsibleProf,
-      status: 'in_progress',
+      status: 'in_progress' as const,
       updatedAt: new Date().toISOString()
     };
-    setGoals([...goals, goalItem]);
+    const saved = await addGoalToFirestore(goalPayload);
+    setGoals(prev => [...prev.filter(g => g.id !== saved.id), saved]);
     setShowGoalModal(false);
+    triggerCelebration('Meta salva no Firestore');
   };
 
-  const handleUpdateGoalLevel = (goalId: string, delta: number) => {
-    setGoals(goals.map(g => {
-      if (g.id === goalId) {
-        const next = Math.max(0, Math.min(100, g.nivel + delta));
-        return {
-          ...g,
-          nivel: next,
-          status: next === 100 ? 'achieved' : 'in_progress',
-          updatedAt: new Date().toISOString()
-        };
-      }
-      return g;
-    }));
+  const handleUpdateGoalLevel = async (goalId: string, delta: number) => {
+    const target = goals.find(g => g.id === goalId);
+    if (!target) return;
+    const next = Math.max(0, Math.min(100, target.nivel + delta));
+    setGoals(goals.map(g => g.id === goalId ? { ...g, nivel: next, status: next === 100 ? 'achieved' : 'in_progress', updatedAt: new Date().toISOString() } : g));
+    await updateGoalLevelInFirestore(goalId, next);
   };
 
-  const handleAddSchool = (e: React.FormEvent) => {
+  const handleAddSchool = async (e: React.FormEvent) => {
     e.preventDefault();
-    const schItem: SchoolRecord = {
-      id: `sch-${Date.now()}`,
+    const schPayload = {
       childId: childData.id,
       date: newSchool.date,
       teacher: newSchool.teacher,
@@ -196,14 +260,15 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
       recadoPais: newSchool.recadoPais,
       createdAt: new Date().toISOString()
     };
-    setSchoolRecords([schItem, ...schoolRecords]);
+    const saved = await addSchoolRecordToFirestore(schPayload);
+    setSchoolRecords(prev => [saved, ...prev.filter(r => r.id !== saved.id)]);
     setShowSchoolModal(false);
+    triggerCelebration('Registro escolar salvo no Firestore');
   };
 
-  const handleAddAgenda = (e: React.FormEvent) => {
+  const handleAddAgenda = async (e: React.FormEvent) => {
     e.preventDefault();
-    const agItem: AgendaEvent = {
-      id: `ag-${Date.now()}`,
+    const agPayload = {
       childId: childData.id,
       day: newAgenda.day,
       date: newAgenda.date,
@@ -211,15 +276,21 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
       tipo: newAgenda.tipo,
       who: newAgenda.who,
       local: newAgenda.local,
-      status: 'agendado',
+      status: 'agendado' as const,
       completed: false
     };
-    setAgenda([...agenda, agItem]);
+    const saved = await addAgendaEventToFirestore(agPayload);
+    setAgenda(prev => [...prev.filter(a => a.id !== saved.id), saved]);
     setShowAgendaModal(false);
+    triggerCelebration('Atendimento agendado no Firestore');
   };
 
-  const toggleAgendaCompleted = (id: string) => {
-    setAgenda(agenda.map(a => a.id === id ? { ...a, completed: !a.completed, status: !a.completed ? 'realizado' : 'agendado' } : a));
+  const toggleAgendaCompleted = async (id: string) => {
+    const target = agenda.find(a => a.id === id);
+    if (!target) return;
+    const newCompleted = !target.completed;
+    setAgenda(agenda.map(a => a.id === id ? { ...a, completed: newCompleted, status: newCompleted ? 'realizado' : 'agendado' } : a));
+    await toggleAgendaInFirestore(id, newCompleted);
   };
 
   return (
@@ -244,9 +315,19 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
                 IP
               </div>
               <div>
-                <h1 className="text-sm font-black font-kids text-slate-900 leading-none">
-                  Central do Ian
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-sm font-black font-kids text-slate-900 leading-none">
+                    Central do Ian
+                  </h1>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold font-kids">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </span>
+                    <Cloud className="w-2.5 h-2.5" />
+                    <span>Firebase Ao Vivo</span>
+                  </span>
+                </div>
                 <span className="text-[10px] text-sky-600 font-bold">Acompanhamento Multidisciplinar</span>
               </div>
             </div>
@@ -536,10 +617,10 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
                       />
                     </div>
                     <button
-                      onClick={() => setShowEditProntuario(false)}
-                      className="blob-button bg-emerald-500 text-white !py-2 !px-4 text-xs"
+                      onClick={handleSaveProntuario}
+                      className="blob-button bg-emerald-500 text-white !py-2 !px-4 text-xs font-bold font-kids shadow-sm hover:bg-emerald-600 transition-colors"
                     >
-                      Salvar Alterações
+                      Salvar Alterações no Firestore
                     </button>
                   </div>
                 ) : (
