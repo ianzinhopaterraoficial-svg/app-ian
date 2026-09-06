@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { PublicWebsite } from './components/PublicWebsite';
 import { AppDashboard } from './components/AppDashboard';
 import { AuthModal } from './components/AuthModal';
-import { FloatingAudioPlayer } from './components/FloatingAudioPlayer';
 import { Lock, Globe } from 'lucide-react';
 
 function MainContent() {
@@ -69,9 +68,6 @@ function MainContent() {
           onOpenAuthModal={() => setAuthModalOpen(true)} 
         />
       )}
-
-      {/* Floating Audio Player */}
-      <FloatingAudioPlayer />
 
       {/* Authentication Modal */}
       <AuthModal 

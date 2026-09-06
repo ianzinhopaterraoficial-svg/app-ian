@@ -113,6 +113,11 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    // Moments & Galeria de Registros Visuais
+    match /moments/{momentId} {
+      allow read, write: if isAuthenticated();
+    }
+
     // Messages / Chat
     match /messages/{messageId} {
       allow read: if isAuthenticated();

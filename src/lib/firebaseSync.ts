@@ -20,7 +20,8 @@ import {
   initialAchievements, 
   initialSchoolRecords, 
   initialAgenda, 
-  initialDocuments 
+  initialDocuments,
+  initialMoments 
 } from './firebase';
 import { 
   Child, 
@@ -29,7 +30,8 @@ import {
   Achievement, 
   SchoolRecord, 
   AgendaEvent, 
-  DocumentRecord 
+  DocumentRecord,
+  MomentRecord 
 } from '../types';
 
 const STORAGE_PREFIX = 'mundo_azul_cache_';
@@ -133,6 +135,18 @@ export async function seedFirestoreIfEmpty(): Promise<void> {
       for (const d of initialDocuments) {
         await setDoc(doc(db, 'documents', d.id), {
           ...d,
+          timestamp: serverTimestamp()
+        });
+      }
+    }
+
+    // 8. Moments & Galeria de Registros Visuais
+    const momColl = collection(db, 'moments');
+    const momSnap = await getDocs(momColl);
+    if (momSnap.empty) {
+      for (const m of initialMoments) {
+        await setDoc(doc(db, 'moments', m.id), {
+          ...m,
           timestamp: serverTimestamp()
         });
       }
@@ -442,3 +456,61 @@ export function subscribeToDocuments(childId: string, onUpdate: (docs: DocumentR
     return () => {};
   }
 }
+
+/**
+ * Real-time listener for Moments (Galeria de Registros Visuais)
+ */
+export function subscribeToMoments(childId: string, onUpdate: (moments: MomentRecord[]) => void): () => void {
+  const cached = getLocalCache<MomentRecord[]>('moments', initialMoments);
+  onUpdate(cached);
+
+  try {
+    const coll = collection(db, 'moments');
+    return onSnapshot(coll, (snap) => {
+      if (!snap.empty) {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })) as MomentRecord[];
+        list.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+        setLocalCache('moments', list);
+        onUpdate(list);
+      }
+    }, (err) => {
+      console.warn('Moments snapshot error:', err.message);
+      handleFirestoreError(err, OperationType.LIST, 'moments');
+    });
+  } catch {
+    return () => {};
+  }
+}
+
+/**
+ * Add Moment to Firestore
+ */
+export async function addMomentToFirestore(moment: Omit<MomentRecord, 'id'>): Promise<MomentRecord> {
+  const tempId = `moment-${Date.now()}`;
+  const fullMoment: MomentRecord = { id: tempId, ...moment };
+
+  try {
+    const docRef = await addDoc(collection(db, 'moments'), {
+      ...moment,
+      timestamp: serverTimestamp()
+    });
+    return { id: docRef.id, ...moment };
+  } catch (err) {
+    console.warn('Fallback saving moment locally:', err);
+    handleFirestoreError(err, OperationType.CREATE, 'moments');
+    return fullMoment;
+  }
+}
+
+/**
+ * Delete Moment from Firestore
+ */
+export async function deleteMomentFromFirestore(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'moments', id));
+  } catch (err) {
+    console.warn('Error deleting moment from Firestore:', err);
+    handleFirestoreError(err, OperationType.DELETE, `moments/${id}`);
+  }
+}
+

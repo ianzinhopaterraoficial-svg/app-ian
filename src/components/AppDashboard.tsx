@@ -25,7 +25,8 @@ import {
   Brain,
   Layers,
   Baby,
-  Cloud
+  Cloud,
+  Camera
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -35,7 +36,8 @@ import {
   initialAchievements, 
   initialSchoolRecords, 
   initialAgenda, 
-  initialDocuments 
+  initialDocuments,
+  initialMoments 
 } from '../lib/firebase';
 import { 
   seedFirestoreIfEmpty,
@@ -52,10 +54,14 @@ import {
   addAgendaEventToFirestore,
   toggleAgendaInFirestore,
   subscribeToAchievements,
-  subscribeToDocuments
+  subscribeToDocuments,
+  subscribeToMoments,
+  addMomentToFirestore,
+  deleteMomentFromFirestore
 } from '../lib/firebaseSync';
-import { Child, TherapySession, Goal, Achievement, DiaryRecord, SchoolRecord, AgendaEvent, DocumentRecord, UserRole } from '../types';
+import { Child, TherapySession, Goal, Achievement, DiaryRecord, SchoolRecord, AgendaEvent, DocumentRecord, MomentRecord, UserRole } from '../types';
 import { DailyObservationsDiary } from './DailyObservationsDiary';
+import { MomentsGallery } from './MomentsGallery';
 
 interface AppDashboardProps {
   onBackToSite: () => void;
@@ -66,7 +72,7 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   const { user, systemUser, signOut, switchRoleDemo, isParent, isTherapist, isSchool, isAdmin } = useAuth();
   
   // Tab State
-  const [activeTab, setActiveTab] = useState<'prontuario' | 'sessoes' | 'metas' | 'diario' | 'escola' | 'agenda' | 'conquistas' | 'documentos'>('prontuario');
+  const [activeTab, setActiveTab] = useState<'prontuario' | 'sessoes' | 'metas' | 'diario' | 'momentos' | 'escola' | 'agenda' | 'conquistas' | 'documentos'>('prontuario');
 
   // Entities state
   const [childData, setChildData] = useState<Child>(initialChildData);
@@ -76,6 +82,7 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   const [schoolRecords, setSchoolRecords] = useState<SchoolRecord[]>(initialSchoolRecords);
   const [agenda, setAgenda] = useState<AgendaEvent[]>(initialAgenda);
   const [documents, setDocuments] = useState<DocumentRecord[]>(initialDocuments);
+  const [moments, setMoments] = useState<MomentRecord[]>(initialMoments);
   const [isFirebaseSynced, setIsFirebaseSynced] = useState<boolean>(true);
 
   // Synchronize with Firebase Firestore on mount
@@ -112,6 +119,10 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
       setDocuments(data);
       setIsFirebaseSynced(true);
     });
+    const unsubMoments = subscribeToMoments(initialChildData.id, (data) => {
+      setMoments(data);
+      setIsFirebaseSynced(true);
+    });
 
     return () => {
       unsubChild();
@@ -121,6 +132,7 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
       unsubSchool();
       unsubAgenda();
       unsubDocs();
+      unsubMoments();
     };
   }, []);
 
@@ -293,6 +305,17 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
     await toggleAgendaInFirestore(id, newCompleted);
   };
 
+  const handleAddMoment = async (momentData: Omit<MomentRecord, 'id'>) => {
+    const saved = await addMomentToFirestore(momentData);
+    setMoments(prev => [saved, ...prev.filter(m => m.id !== saved.id)]);
+    triggerCelebration('Novo registro visual compartilhado!');
+  };
+
+  const handleDeleteMoment = async (id: string) => {
+    await deleteMomentFromFirestore(id);
+    setMoments(prev => prev.filter(m => m.id !== id));
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#EAF5FC] via-[#F4FBFF] to-[#EAF5FC] text-slate-800 font-sans pb-20">
       {/* Top Navbar */}
@@ -437,6 +460,10 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
               <span className="block text-xl font-black text-pink-600 font-kids">{achievements.length}</span>
               <span className="text-[10px] font-bold text-slate-500 uppercase">Marcos</span>
             </div>
+            <div className="text-center px-3 py-2 rounded-2xl bg-purple-50 border border-purple-100 min-w-20">
+              <span className="block text-xl font-black text-purple-600 font-kids">{moments.length}</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase">Fotos/Momentos</span>
+            </div>
           </div>
         </div>
 
@@ -487,7 +514,19 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
             }`}
           >
             <Heart className="w-4 h-4 text-rose-500" />
-            <span>Diário de Observações (Pais & Terapeutas)</span>
+            <span>Diário de Observações</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('momentos')}
+            className={`px-4 py-2.5 rounded-2xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'momentos' 
+                ? 'bg-sky-500 text-white shadow-md shadow-sky-500/20' 
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <Camera className="w-4 h-4 text-purple-500" />
+            <span>Galeria de Momentos ({moments.length})</span>
           </button>
 
           <button
@@ -938,6 +977,19 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
         {/* ========================================================================= */}
         {activeTab === 'diario' && (
           <DailyObservationsDiary childId={childData.id} childName={childData.name} />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: GALERIA DE MOMENTOS (FOTOS & REGISTROS VISUAIS) COM FIRESTORE */}
+        {/* ========================================================================= */}
+        {activeTab === 'momentos' && (
+          <MomentsGallery
+            moments={moments}
+            onAddMoment={handleAddMoment}
+            onDeleteMoment={handleDeleteMoment}
+            systemUser={systemUser}
+            isAdmin={isAdmin}
+          />
         )}
 
         {/* ========================================================================= */}

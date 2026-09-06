@@ -141,3 +141,21 @@ export interface DocumentRecord {
   author: string;
   fileUrl?: string;
 }
+
+export type MomentCategory = 'terapia' | 'escola' | 'familia' | 'conquista' | 'sensorial' | 'geral';
+
+export interface MomentRecord {
+  id: string;
+  childId: string;
+  title: string;
+  description: string;
+  photoUrl: string;
+  date: string; // Formato DD/MM/AAAA ou YYYY-MM-DD
+  category: MomentCategory;
+  authorId: string;
+  authorName: string;
+  authorRole: UserRole;
+  authorRoleTitle?: string;
+  tags?: string[];
+  createdAt: string;
+}

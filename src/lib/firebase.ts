@@ -26,7 +26,7 @@ import {
   orderBy
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { SystemUser, Child, TherapySession, Goal, Achievement, DiaryRecord, SchoolRecord, AgendaEvent, DocumentRecord } from '../types';
+import { SystemUser, Child, TherapySession, Goal, Achievement, DiaryRecord, SchoolRecord, AgendaEvent, DocumentRecord, MomentRecord } from '../types';
 
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
@@ -481,3 +481,82 @@ export const initialDocuments: DocumentRecord[] = [
     fileUrl: '#'
   }
 ];
+
+export const initialMoments: MomentRecord[] = [
+  {
+    id: 'moment-01',
+    childId: 'ian-paterra-01',
+    title: 'Exploração Sonora no Metalofone',
+    description: 'Ian completou a pausa da cantiga batendo palmas no tempo exato e olhou com alegria para pedir a repetição da música!',
+    photoUrl: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=800&auto=format&fit=crop&q=80',
+    date: '05/03/2026',
+    category: 'terapia',
+    authorId: 'prof-barbara',
+    authorName: 'Barbara Momberg',
+    authorRole: 'therapist',
+    authorRoleTitle: 'Musicoterapeuta',
+    tags: ['Musicoterapia', 'Atenção Compartilhada', 'Ritmo'],
+    createdAt: new Date(Date.now() - 1 * 86400000).toISOString()
+  },
+  {
+    id: 'moment-02',
+    childId: 'ian-paterra-01',
+    title: 'Superação Sensorial com Massinhas Coloridas',
+    description: 'Hoje na T.O. o Ian moldou bolinhas e cortou formas de estrelinhas por 15 minutos seguidos sem aversão tátil. Um grande marco!',
+    photoUrl: 'https://images.unsplash.com/photo-1596495578065-6e0763fa1178?w=800&auto=format&fit=crop&q=80',
+    date: '04/03/2026',
+    category: 'sensorial',
+    authorId: 'prof-edineia',
+    authorName: 'Edinéia Almeida',
+    authorRole: 'therapist',
+    authorRoleTitle: 'Terapeuta Ocupacional',
+    tags: ['Integração Sensorial', 'T.O.', 'Coordenação Fina'],
+    createdAt: new Date(Date.now() - 2 * 86400000).toISOString()
+  },
+  {
+    id: 'moment-03',
+    childId: 'ian-paterra-01',
+    title: 'Tarde no Parque com Balanço & Sorrisos',
+    description: 'Passeio em família! Ian pediu "mais balanço" apontando e mantendo contato visual direto com a mamãe e o papai.',
+    photoUrl: 'https://images.unsplash.com/photo-1476703993599-0035a21b17a9?w=800&auto=format&fit=crop&q=80',
+    date: '01/03/2026',
+    category: 'familia',
+    authorId: 'user-marcos',
+    authorName: 'Marcos Paterra',
+    authorRole: 'admin',
+    authorRoleTitle: 'Pai & Administrador',
+    tags: ['Família', 'Parque', 'Comunicação Espontânea'],
+    createdAt: new Date(Date.now() - 5 * 86400000).toISOString()
+  },
+  {
+    id: 'moment-04',
+    childId: 'ian-paterra-01',
+    title: 'Pintura Coletiva na Sala de Aula',
+    description: 'Ian participou da roda com os coleguinhas e pintou o sol no cartaz da primavera com as duas mãozinhas na Escola Reino das Letras.',
+    photoUrl: 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=800&auto=format&fit=crop&q=80',
+    date: '28/02/2026',
+    category: 'escola',
+    authorId: 'prof-mariana',
+    authorName: 'Profª Mariana',
+    authorRole: 'school',
+    authorRoleTitle: 'Professora Mediadora',
+    tags: ['Escola', 'Inclusão', 'Socialização'],
+    createdAt: new Date(Date.now() - 6 * 86400000).toISOString()
+  },
+  {
+    id: 'moment-05',
+    childId: 'ian-paterra-01',
+    title: 'Emparelhamento Perfeito de Blocos no ABA',
+    description: '85% de acertos na separação de blocos azuis, vermelhos e amarelos! Ian comemorou cada conquista batendo palmas.',
+    photoUrl: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?w=800&auto=format&fit=crop&q=80',
+    date: '26/02/2026',
+    category: 'conquista',
+    authorId: 'prof-marcelo',
+    authorName: 'Marcelo Cardoso',
+    authorRole: 'therapist',
+    authorRoleTitle: 'Psicólogo ABA',
+    tags: ['ABA', 'Cores', 'Atenção Sustentada'],
+    createdAt: new Date(Date.now() - 8 * 86400000).toISOString()
+  }
+];
+

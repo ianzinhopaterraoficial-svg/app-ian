@@ -268,65 +268,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
                 <span>Continuar com Google</span>
               </button>
 
-              {/* Instant 1-Click Access Card */}
-              <div className="p-3 bg-gradient-to-br from-sky-50 to-indigo-50/50 rounded-2xl border border-sky-100">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-bold text-sky-800 uppercase tracking-wide font-kids flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
-                    <span>Acesso Direto com 1 Clique:</span>
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('admin', 'Marcos Paterra', 'ianzinhopaterraoficial@gmail.com', 'Pai do Ian & Administrador')}
-                    className="p-2 rounded-xl bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-left transition-all group"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      <p className="font-bold text-xs text-slate-800 group-hover:text-emerald-800 font-kids truncate">Marcos (Pai)</p>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Admin Geral</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('parent', 'Alessandra Paterra', 'alessandra@ianzinhopaterraoficial.com.br', 'Mãe do Ian')}
-                    className="p-2 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-300 text-left transition-all group"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                      <p className="font-bold text-xs text-slate-800 group-hover:text-rose-800 font-kids truncate">Alessandra (Mãe)</p>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Família</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('therapist', 'Dra. Karen Camargo', 'dra.karen@mundoazul.com.br', 'Neuropediatra')}
-                    className="p-2 rounded-xl bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-left transition-all group"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                      <p className="font-bold text-xs text-slate-800 group-hover:text-indigo-800 font-kids truncate">Dra. Karen</p>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Neuropediatra</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('school', 'Profª Mariana', 'escola@reinodasletras.com.br', 'Escola Reino das Letras')}
-                    className="p-2 rounded-xl bg-white hover:bg-amber-50 border border-slate-200 hover:border-amber-300 text-left transition-all group"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                      <p className="font-bold text-xs text-slate-800 group-hover:text-amber-800 font-kids truncate">Profª Mariana</p>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Escola</p>
-                  </button>
-                </div>
-              </div>
-
               <div className="flex items-center my-3">
                 <div className="flex-1 border-t border-slate-200"></div>
                 <span className="px-3 text-xs text-slate-400 font-bold uppercase tracking-wider">ou com e-mail e senha</span>

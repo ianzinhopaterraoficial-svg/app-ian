@@ -18,6 +18,7 @@ import {
   Activity
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { MenuAudioPlayer } from './MenuAudioPlayer';
 
 interface PublicWebsiteProps {
   onOpenApp: () => void;
@@ -75,6 +76,9 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({ onOpenApp, onOpenA
             </a>
             <a href="#recursos" className="hover:text-brand-blue transition-colors">Dicas</a>
             
+            {/* Música do Ian no Menu Inicial */}
+            <MenuAudioPlayer variant="navbar" />
+
             {/* AREA DO IAN BUTTON */}
             <button 
               onClick={handleAreaDoIanClick}
@@ -129,6 +133,11 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({ onOpenApp, onOpenA
         {mobileMenuOpen && (
           <div className="lg:hidden mt-3 bg-white/95 backdrop-blur-2xl rounded-[2.5rem] p-6 shadow-2xl border border-brand-blue/10 animate-fadeIn">
             <div className="flex flex-col gap-4 text-center font-kids text-lg font-bold">
+              {/* Música do Ian no Menu Mobile */}
+              <div className="pb-2 border-b border-slate-100">
+                <MenuAudioPlayer variant="mobile" />
+              </div>
+
               <a href="#inicio" onClick={() => setMobileMenuOpen(false)} className="text-slate-700 hover:text-brand-blue py-1">Início</a>
               <a href="#sobre" onClick={() => setMobileMenuOpen(false)} className="text-slate-700 hover:text-brand-blue py-1">Nossa História</a>
               <a href="#album-evolucao" onClick={() => setMobileMenuOpen(false)} className="text-pink-600 bg-pink-50 p-2 rounded-xl flex items-center justify-center gap-2">
