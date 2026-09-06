@@ -21,7 +21,9 @@ import {
   initialSchoolRecords, 
   initialAgenda, 
   initialDocuments,
-  initialMoments 
+  initialMoments,
+  initialChannels,
+  initialMessages 
 } from './firebase';
 import { 
   Child, 
@@ -31,7 +33,9 @@ import {
   SchoolRecord, 
   AgendaEvent, 
   DocumentRecord,
-  MomentRecord 
+  MomentRecord,
+  DirectChannel,
+  DirectMessage 
 } from '../types';
 
 const STORAGE_PREFIX = 'mundo_azul_cache_';
@@ -147,6 +151,30 @@ export async function seedFirestoreIfEmpty(): Promise<void> {
       for (const m of initialMoments) {
         await setDoc(doc(db, 'moments', m.id), {
           ...m,
+          timestamp: serverTimestamp()
+        });
+      }
+    }
+
+    // 9. Direct Channels (Canais de Mensagens entre Terapeutas/Escola e Pais)
+    const chanColl = collection(db, 'direct_channels');
+    const chanSnap = await getDocs(chanColl);
+    if (chanSnap.empty) {
+      for (const ch of initialChannels) {
+        await setDoc(doc(db, 'direct_channels', ch.id), {
+          ...ch,
+          timestamp: serverTimestamp()
+        });
+      }
+    }
+
+    // 10. Direct Messages
+    const msgColl = collection(db, 'direct_messages');
+    const msgSnap = await getDocs(msgColl);
+    if (msgSnap.empty) {
+      for (const msg of initialMessages) {
+        await setDoc(doc(db, 'direct_messages', msg.id), {
+          ...msg,
           timestamp: serverTimestamp()
         });
       }
@@ -513,4 +541,255 @@ export async function deleteMomentFromFirestore(id: string): Promise<void> {
     handleFirestoreError(err, OperationType.DELETE, `moments/${id}`);
   }
 }
+
+/* =========================================================================
+   ADMIN CRUD OPERATIONS (Acesso Total: Editar & Excluir)
+   ========================================================================= */
+
+/**
+ * Atualizar Sessão Terapêutica (Admin/Terapeuta)
+ */
+export async function updateSessionInFirestore(session: TherapySession): Promise<void> {
+  try {
+    const sessionRef = doc(db, 'sessions', session.id);
+    await setDoc(sessionRef, {
+      ...session,
+      updatedAt: new Date().toISOString(),
+      timestamp: serverTimestamp()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Error updating session in Firestore:', err);
+    handleFirestoreError(err, OperationType.UPDATE, `sessions/${session.id}`);
+  }
+}
+
+/**
+ * Excluir Sessão Terapêutica (Admin)
+ */
+export async function deleteSessionFromFirestore(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'sessions', id));
+  } catch (err) {
+    console.warn('Error deleting session from Firestore:', err);
+    handleFirestoreError(err, OperationType.DELETE, `sessions/${id}`);
+  }
+}
+
+/**
+ * Atualizar Meta PEI (Admin)
+ */
+export async function updateGoalInFirestore(goal: Goal): Promise<void> {
+  try {
+    const goalRef = doc(db, 'goals', goal.id);
+    await setDoc(goalRef, {
+      ...goal,
+      updatedAt: new Date().toISOString(),
+      timestamp: serverTimestamp()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Error updating goal in Firestore:', err);
+    handleFirestoreError(err, OperationType.UPDATE, `goals/${goal.id}`);
+  }
+}
+
+/**
+ * Excluir Meta PEI (Admin)
+ */
+export async function deleteGoalFromFirestore(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'goals', id));
+  } catch (err) {
+    console.warn('Error deleting goal from Firestore:', err);
+    handleFirestoreError(err, OperationType.DELETE, `goals/${id}`);
+  }
+}
+
+/**
+ * Atualizar Registro Escolar (Admin/Escola)
+ */
+export async function updateSchoolRecordInFirestore(record: SchoolRecord): Promise<void> {
+  try {
+    const schRef = doc(db, 'school_records', record.id);
+    await setDoc(schRef, {
+      ...record,
+      updatedAt: new Date().toISOString(),
+      timestamp: serverTimestamp()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Error updating school record in Firestore:', err);
+    handleFirestoreError(err, OperationType.UPDATE, `school_records/${record.id}`);
+  }
+}
+
+/**
+ * Excluir Registro Escolar (Admin)
+ */
+export async function deleteSchoolRecordFromFirestore(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'school_records', id));
+  } catch (err) {
+    console.warn('Error deleting school record from Firestore:', err);
+    handleFirestoreError(err, OperationType.DELETE, `school_records/${id}`);
+  }
+}
+
+/**
+ * Atualizar Evento da Agenda (Admin)
+ */
+export async function updateAgendaEventInFirestore(event: AgendaEvent): Promise<void> {
+  try {
+    const agRef = doc(db, 'agenda', event.id);
+    await setDoc(agRef, {
+      ...event,
+      updatedAt: new Date().toISOString(),
+      timestamp: serverTimestamp()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Error updating agenda event in Firestore:', err);
+    handleFirestoreError(err, OperationType.UPDATE, `agenda/${event.id}`);
+  }
+}
+
+/**
+ * Excluir Evento da Agenda (Admin)
+ */
+export async function deleteAgendaEventFromFirestore(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'agenda', id));
+  } catch (err) {
+    console.warn('Error deleting agenda event from Firestore:', err);
+    handleFirestoreError(err, OperationType.DELETE, `agenda/${id}`);
+  }
+}
+
+/**
+ * Adicionar Documento (Admin)
+ */
+export async function addDocumentToFirestore(docData: Omit<DocumentRecord, 'id'>): Promise<DocumentRecord> {
+  const tempId = `doc-${Date.now()}`;
+  const fullDoc: DocumentRecord = { id: tempId, ...docData };
+  try {
+    const docRef = await addDoc(collection(db, 'documents'), {
+      ...docData,
+      timestamp: serverTimestamp()
+    });
+    return { id: docRef.id, ...docData };
+  } catch (err) {
+    console.warn('Fallback saving document locally:', err);
+    handleFirestoreError(err, OperationType.CREATE, 'documents');
+    return fullDoc;
+  }
+}
+
+/**
+ * Excluir Documento (Admin)
+ */
+export async function deleteDocumentFromFirestore(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'documents', id));
+  } catch (err) {
+    console.warn('Error deleting document from Firestore:', err);
+    handleFirestoreError(err, OperationType.DELETE, `documents/${id}`);
+  }
+}
+
+/* =========================================================================
+   MENSAGENS INSTANTÂNEAS INDIVIDUAIS (Comunicação Direta Pais <-> Terapeutas & Escola)
+   ========================================================================= */
+
+/**
+ * Escutar Canais de Comunicação
+ */
+export function subscribeToChannels(onUpdate: (channels: DirectChannel[]) => void): () => void {
+  const cached = getLocalCache<DirectChannel[]>('direct_channels', initialChannels);
+  onUpdate(cached);
+
+  try {
+    const coll = collection(db, 'direct_channels');
+    return onSnapshot(coll, (snap) => {
+      if (!snap.empty) {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })) as DirectChannel[];
+        setLocalCache('direct_channels', list);
+        onUpdate(list);
+      }
+    }, (err) => {
+      console.warn('Channels snapshot notice, using fallback:', err.message);
+    });
+  } catch {
+    return () => {};
+  }
+}
+
+/**
+ * Escutar Mensagens em Tempo Real de um Canal Individual
+ */
+export function subscribeToMessages(channelId: string, onUpdate: (messages: DirectMessage[]) => void): () => void {
+  const initialForChannel = initialMessages.filter(m => m.channelId === channelId);
+  const cached = getLocalCache<DirectMessage[]>('messages_' + channelId, initialForChannel);
+  onUpdate(cached);
+
+  try {
+    const coll = collection(db, 'direct_messages');
+    return onSnapshot(coll, (snap) => {
+      if (!snap.empty) {
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() })) as DirectMessage[];
+        const filtered = all
+          .filter(m => m.channelId === channelId)
+          .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+        setLocalCache('messages_' + channelId, filtered);
+        onUpdate(filtered);
+      }
+    }, (err) => {
+      console.warn('Messages snapshot notice, using fallback:', err.message);
+    });
+  } catch {
+    return () => {};
+  }
+}
+
+/**
+ * Enviar Mensagem Instantânea
+ */
+export async function sendMessageToFirestore(msg: Omit<DirectMessage, 'id'>): Promise<DirectMessage> {
+  const tempId = `msg-${Date.now()}`;
+  const fullMsg: DirectMessage = { id: tempId, ...msg };
+
+  try {
+    const docRef = await addDoc(collection(db, 'direct_messages'), {
+      ...msg,
+      timestamp: msg.timestamp || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      createdAt: msg.createdAt || new Date().toISOString(),
+      serverTimestamp: serverTimestamp()
+    });
+
+    // Atualizar último recado do canal
+    try {
+      const channelRef = doc(db, 'direct_channels', msg.channelId);
+      await setDoc(channelRef, {
+        lastMessage: msg.text,
+        lastMessageTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch {}
+
+    return { id: docRef.id, ...msg };
+  } catch (err) {
+    console.warn('Fallback saving message locally:', err);
+    handleFirestoreError(err, OperationType.CREATE, 'direct_messages');
+    return fullMsg;
+  }
+}
+
+/**
+ * Excluir Mensagem (Admin ou Autor)
+ */
+export async function deleteMessageFromFirestore(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'direct_messages', id));
+  } catch (err) {
+    console.warn('Error deleting message from Firestore:', err);
+    handleFirestoreError(err, OperationType.DELETE, `direct_messages/${id}`);
+  }
+}
+
 

@@ -26,7 +26,11 @@ import {
   Layers,
   Baby,
   Cloud,
-  Camera
+  Camera,
+  MessageSquare,
+  Pencil,
+  Trash2,
+  X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -45,16 +49,26 @@ import {
   saveChildToFirestore,
   subscribeToSessions,
   addSessionToFirestore,
+  updateSessionInFirestore,
+  deleteSessionFromFirestore,
   subscribeToGoals,
   addGoalToFirestore,
+  updateGoalInFirestore,
+  deleteGoalFromFirestore,
   updateGoalLevelInFirestore,
   subscribeToSchoolRecords,
   addSchoolRecordToFirestore,
+  updateSchoolRecordInFirestore,
+  deleteSchoolRecordFromFirestore,
   subscribeToAgenda,
   addAgendaEventToFirestore,
+  updateAgendaEventInFirestore,
+  deleteAgendaEventFromFirestore,
   toggleAgendaInFirestore,
   subscribeToAchievements,
   subscribeToDocuments,
+  addDocumentToFirestore,
+  deleteDocumentFromFirestore,
   subscribeToMoments,
   addMomentToFirestore,
   deleteMomentFromFirestore
@@ -62,6 +76,7 @@ import {
 import { Child, TherapySession, Goal, Achievement, DiaryRecord, SchoolRecord, AgendaEvent, DocumentRecord, MomentRecord, UserRole } from '../types';
 import { DailyObservationsDiary } from './DailyObservationsDiary';
 import { MomentsGallery } from './MomentsGallery';
+import { InstantDirectChat } from './InstantDirectChat';
 
 interface AppDashboardProps {
   onBackToSite: () => void;
@@ -72,7 +87,7 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   const { user, systemUser, signOut, switchRoleDemo, isParent, isTherapist, isSchool, isAdmin } = useAuth();
   
   // Tab State
-  const [activeTab, setActiveTab] = useState<'prontuario' | 'sessoes' | 'metas' | 'diario' | 'momentos' | 'escola' | 'agenda' | 'conquistas' | 'documentos'>('prontuario');
+  const [activeTab, setActiveTab] = useState<'prontuario' | 'sessoes' | 'metas' | 'diario' | 'momentos' | 'mensagens' | 'escola' | 'agenda' | 'conquistas' | 'documentos'>('prontuario');
 
   // Entities state
   const [childData, setChildData] = useState<Child>(initialChildData);
@@ -141,15 +156,31 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showSchoolModal, setShowSchoolModal] = useState(false);
   const [showAgendaModal, setShowAgendaModal] = useState(false);
+  const [showDocModal, setShowDocModal] = useState(false);
   const [showEditProntuario, setShowEditProntuario] = useState(false);
 
-  // Forms states
+  // Modals for Editing (Acesso Total Admin / Responsáveis)
+  const [editingSession, setEditingSession] = useState<TherapySession | null>(null);
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [editingSchool, setEditingSchool] = useState<SchoolRecord | null>(null);
+  const [editingAgenda, setEditingAgenda] = useState<AgendaEvent | null>(null);
+
+  // New Document form state - all fields empty without prefilling
+  const [newDoc, setNewDoc] = useState({
+    nome: '',
+    cat: '',
+    author: '',
+    data: '',
+    url: ''
+  });
+
+  // Forms states - all fields empty without prefilling
   const [newSession, setNewSession] = useState({
-    professionalName: systemUser?.name || 'Dra. Karen Camargo',
-    role: systemUser?.roleTitle || 'Neuropediatra',
-    date: new Date().toLocaleDateString('pt-BR'),
-    time: '14:00',
-    goalCategory: 'Comunicação & Comportamento',
+    professionalName: '',
+    role: '',
+    date: '',
+    time: '',
+    goalCategory: '',
     activities: '',
     evolution: '',
     nextGoals: '',
@@ -159,33 +190,100 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
 
   const [newGoal, setNewGoal] = useState({
     name: '',
-    cat: 'Comunicação',
-    nivel: 50,
+    cat: '',
+    nivel: 0,
     description: '',
-    responsibleProf: systemUser?.name || 'Equipe Multidisciplinar'
+    responsibleProf: ''
   });
 
   const [newSchool, setNewSchool] = useState({
-    date: new Date().toLocaleDateString('pt-BR'),
-    teacher: systemUser?.name || 'Profª Mariana',
+    date: '',
+    teacher: '',
     atividade: '',
-    participacao: 'Boa participação nas atividades em grupo',
-    socializacao: 'Interagiu bem com os colegas de sala',
-    comunicacao: 'Utilizou apoio visual para pedir lanche',
-    autonomia: 'Conseguiu guardar o material',
+    participacao: '',
+    socializacao: '',
+    comunicacao: '',
+    autonomia: '',
     conquista: '',
     observacoes: '',
     recadoPais: ''
   });
 
   const [newAgenda, setNewAgenda] = useState({
-    day: 'Segunda-feira',
-    date: new Date().toLocaleDateString('pt-BR'),
-    time: '14:00',
-    tipo: 'Terapia Ocupacional',
-    who: 'Edinéia Almeida',
-    local: 'Clínica Mundo Azul'
+    day: '',
+    date: '',
+    time: '',
+    tipo: '',
+    who: '',
+    local: ''
   });
+
+  // Open modal helpers that ensure clean empty fields
+  const openNewSessionModal = () => {
+    setNewSession({
+      professionalName: '',
+      role: '',
+      date: '',
+      time: '',
+      goalCategory: '',
+      activities: '',
+      evolution: '',
+      nextGoals: '',
+      difficulties: '',
+      recommendations: ''
+    });
+    setShowSessionModal(true);
+  };
+
+  const openNewGoalModal = () => {
+    setNewGoal({
+      name: '',
+      cat: '',
+      nivel: 0,
+      description: '',
+      responsibleProf: ''
+    });
+    setShowGoalModal(true);
+  };
+
+  const openNewSchoolModal = () => {
+    setNewSchool({
+      date: '',
+      teacher: '',
+      atividade: '',
+      participacao: '',
+      socializacao: '',
+      comunicacao: '',
+      autonomia: '',
+      conquista: '',
+      observacoes: '',
+      recadoPais: ''
+    });
+    setShowSchoolModal(true);
+  };
+
+  const openNewAgendaModal = () => {
+    setNewAgenda({
+      day: '',
+      date: '',
+      time: '',
+      tipo: '',
+      who: '',
+      local: ''
+    });
+    setShowAgendaModal(true);
+  };
+
+  const openNewDocModal = () => {
+    setNewDoc({
+      nome: '',
+      cat: '',
+      author: '',
+      data: '',
+      url: ''
+    });
+    setShowDocModal(true);
+  };
 
   // Confetti celebration function
   const triggerCelebration = (title: string) => {
@@ -314,6 +412,98 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   const handleDeleteMoment = async (id: string) => {
     await deleteMomentFromFirestore(id);
     setMoments(prev => prev.filter(m => m.id !== id));
+  };
+
+  // ADMIN CRUD HANDLERS (Acesso Total)
+  const handleUpdateSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSession) return;
+    await updateSessionInFirestore(editingSession);
+    setSessions(prev => prev.map(s => s.id === editingSession.id ? editingSession : s));
+    setEditingSession(null);
+    triggerCelebration('Sessão atualizada com sucesso!');
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este atendimento permanentemente?')) return;
+    await deleteSessionFromFirestore(id);
+    setSessions(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleUpdateGoal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGoal) return;
+    await updateGoalInFirestore(editingGoal);
+    setGoals(prev => prev.map(g => g.id === editingGoal.id ? editingGoal : g));
+    setEditingGoal(null);
+    triggerCelebration('Meta PEI atualizada com sucesso!');
+  };
+
+  const handleDeleteGoal = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta meta PEI permanentemente?')) return;
+    await deleteGoalFromFirestore(id);
+    setGoals(prev => prev.filter(g => g.id !== id));
+  };
+
+  const handleUpdateSchool = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSchool) return;
+    await updateSchoolRecordInFirestore(editingSchool);
+    setSchoolRecords(prev => prev.map(r => r.id === editingSchool.id ? editingSchool : r));
+    setEditingSchool(null);
+    triggerCelebration('Registro escolar atualizado!');
+  };
+
+  const handleDeleteSchool = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este registro escolar?')) return;
+    await deleteSchoolRecordFromFirestore(id);
+    setSchoolRecords(prev => prev.filter(r => r.id !== id));
+  };
+
+  const handleUpdateAgenda = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAgenda) return;
+    await updateAgendaEventInFirestore(editingAgenda);
+    setAgenda(prev => prev.map(a => a.id === editingAgenda.id ? editingAgenda : a));
+    setEditingAgenda(null);
+    triggerCelebration('Agendamento atualizado com sucesso!');
+  };
+
+  const handleDeleteAgenda = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este agendamento?')) return;
+    await deleteAgendaEventFromFirestore(id);
+    setAgenda(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleAddDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDoc.nome) return;
+    const docPayload = {
+      childId: childData.id,
+      nome: newDoc.nome,
+      cat: newDoc.cat,
+      author: newDoc.author,
+      data: newDoc.data,
+      url: newDoc.url || 'https://storage.googleapis.com/ianzinho-paterra/documento.pdf',
+      createdAt: new Date().toISOString()
+    };
+    const saved = await addDocumentToFirestore(docPayload);
+    setDocuments(prev => [saved, ...prev.filter(d => d.id !== saved.id)]);
+    setShowDocModal(false);
+    setNewDoc({
+      nome: '',
+      cat: 'Relatório Clínico',
+      author: systemUser?.name || 'Dra. Karen Camargo',
+      data: new Date().toLocaleDateString('pt-BR'),
+      url: ''
+    });
+    triggerCelebration('Documento arquivado no Firestore!');
+  };
+
+  const handleDeleteDocument = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este documento?')) return;
+    await deleteDocumentFromFirestore(id);
+    setDocuments(prev => prev.filter(d => d.id !== id));
   };
 
   return (
@@ -527,6 +717,21 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
           >
             <Camera className="w-4 h-4 text-purple-500" />
             <span>Galeria de Momentos ({moments.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('mensagens')}
+            className={`px-4 py-2.5 rounded-2xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'mensagens' 
+                ? 'bg-sky-500 text-white shadow-md shadow-sky-500/20' 
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4 text-indigo-500" />
+            <span>Mensagens Instantâneas</span>
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              {isAdmin || isParent ? 'Pais ↔ Todos' : 'Canal Individual'}
+            </span>
           </button>
 
           <button
@@ -836,10 +1041,32 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 text-xs font-bold font-kids text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl">
-                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {sess.date}</span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {sess.time}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3 text-xs font-bold font-kids text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl">
+                        <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {sess.date}</span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {sess.time}</span>
+                      </div>
+
+                      {/* Admin / Prof Edit & Delete */}
+                      {(isAdmin || isTherapist) && (
+                        <button
+                          onClick={() => setEditingSession(sess)}
+                          className="p-1.5 rounded-xl bg-slate-100 text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors"
+                          title="Editar Atendimento"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteSession(sess.id)}
+                          className="p-1.5 rounded-xl bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Excluir Atendimento (Admin)"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -916,13 +1143,34 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
                       <span className="px-3 py-1 rounded-full text-xs font-bold font-kids bg-sky-100 text-sky-800">
                         {goal.cat}
                       </span>
-                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                        goal.status === 'achieved' 
-                          ? 'bg-emerald-100 text-emerald-800' 
-                          : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {goal.status === 'achieved' ? 'Conquistado 🎉' : 'Em Progresso'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                          goal.status === 'achieved' 
+                            ? 'bg-emerald-100 text-emerald-800' 
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {goal.status === 'achieved' ? 'Conquistado 🎉' : 'Em Progresso'}
+                        </span>
+
+                        {(isAdmin || isParent || isTherapist) && (
+                          <button
+                            onClick={() => setEditingGoal(goal)}
+                            className="p-1 rounded-lg bg-slate-100 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            title="Editar Meta"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleDeleteGoal(goal.id)}
+                            className="p-1 rounded-lg bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Excluir Meta (Admin)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <h4 className="text-lg font-black font-kids text-slate-900 mb-1">{goal.name}</h4>
@@ -993,6 +1241,19 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
         )}
 
         {/* ========================================================================= */}
+        {/* TAB: MENSAGENS INSTANTÂNEAS (PAIS ↔ TERAPEUTAS & ESCOLA) */}
+        {/* ========================================================================= */}
+        {activeTab === 'mensagens' && (
+          <InstantDirectChat
+            systemUser={systemUser}
+            isAdmin={isAdmin}
+            isParent={isParent}
+            isTherapist={isTherapist}
+            isSchool={isSchool}
+          />
+        )}
+
+        {/* ========================================================================= */}
         {/* TAB 5: ESCOLA & PEDAGÓGICO */}
         {/* ========================================================================= */}
         {activeTab === 'escola' && (
@@ -1022,9 +1283,30 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
                       <h4 className="font-black font-kids text-slate-900 text-sm">{sch.teacher}</h4>
                       <span className="text-[11px] text-slate-400">Data: {sch.date}</span>
                     </div>
-                    <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold font-kids">
-                      Escola Reino das Letras
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold font-kids">
+                        Escola Reino das Letras
+                      </span>
+
+                      {(isAdmin || isSchool) && (
+                        <button
+                          onClick={() => setEditingSchool(sch)}
+                          className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                          title="Editar Registro Escolar"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteSchool(sch.id)}
+                          className="p-1.5 rounded-xl bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Excluir Registro Escolar (Admin)"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid sm:grid-cols-2 gap-4 mt-4 text-xs">
@@ -1117,15 +1399,37 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
                       <Clock className="w-3.5 h-3.5" /> {item.time} ({item.date})
                     </span>
 
-                    <button
-                      onClick={() => toggleAgendaCompleted(item.id)}
-                      className={`p-1.5 rounded-lg text-xs font-bold transition-colors ${
-                        item.completed ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                      title="Marcar como realizado"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => toggleAgendaCompleted(item.id)}
+                        className={`p-1.5 rounded-lg text-xs font-bold transition-colors ${
+                          item.completed ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                        title="Marcar como realizado"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                      </button>
+
+                      {(isAdmin || isParent) && (
+                        <button
+                          onClick={() => setEditingAgenda(item)}
+                          className="p-1.5 rounded-lg bg-slate-100 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                          title="Editar Agendamento"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteAgenda(item.id)}
+                          className="p-1.5 rounded-lg bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Excluir Agendamento (Admin)"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1192,17 +1496,40 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
         {/* ========================================================================= */}
         {activeTab === 'documentos' && (
           <div className="space-y-6">
-            <div className="bg-white p-6 rounded-[2rem] border border-slate-200">
-              <h3 className="text-2xl font-black font-kids text-slate-900">Laudos Médicos, Relatórios & PEI</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Armazenamento digital seguro de documentos clínicos e pedagógicos</p>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-[2rem] border border-slate-200">
+              <div>
+                <h3 className="text-2xl font-black font-kids text-slate-900">Laudos Médicos, Relatórios & PEI</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Armazenamento digital seguro de documentos clínicos e pedagógicos</p>
+              </div>
+
+              {(isAdmin || isParent) && (
+                <button
+                  onClick={() => setShowDocModal(true)}
+                  className="blob-button bg-sky-500 text-white !py-2.5 !px-5 text-xs font-bold shadow-md shadow-sky-500/20"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  <span>Novo Documento</span>
+                </button>
+              )}
             </div>
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {documents.map(doc => (
                 <div key={doc.id} className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
                   <div>
-                    <div className="w-10 h-10 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center mb-3">
-                      <FileText className="w-5 h-5" />
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="w-10 h-10 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteDocument(doc.id)}
+                          className="p-1.5 rounded-xl bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Excluir Documento (Admin)"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                     <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-kids">
                       {doc.cat}
@@ -1576,6 +1903,533 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
                   className="blob-button bg-indigo-500 text-white w-1/2 !py-2.5 text-xs font-bold"
                 >
                   Agendar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: EDITAR ATENDIMENTO (ADMIN / PROFISSIONAL) */}
+      {/* ========================================================================= */}
+      {editingSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xl font-black font-kids text-slate-900">Editar Atendimento</h3>
+              <button onClick={() => setEditingSession(null)} className="p-1 rounded-full text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Acesso total para atualização dos registros clínicos da terapia.</p>
+
+            <form onSubmit={handleUpdateSession} className="space-y-3 text-xs font-bold font-kids">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-600 block mb-1">Profissional</label>
+                  <input
+                    type="text"
+                    value={editingSession.professionalName}
+                    onChange={e => setEditingSession({ ...editingSession, professionalName: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 block mb-1">Especialidade / Cargo</label>
+                  <input
+                    type="text"
+                    value={editingSession.role}
+                    onChange={e => setEditingSession({ ...editingSession, role: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-600 block mb-1">Data</label>
+                  <input
+                    type="text"
+                    value={editingSession.date}
+                    onChange={e => setEditingSession({ ...editingSession, date: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 block mb-1">Horário</label>
+                  <input
+                    type="text"
+                    value={editingSession.time}
+                    onChange={e => setEditingSession({ ...editingSession, time: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Área / Foco da Terapia</label>
+                <input
+                  type="text"
+                  value={editingSession.goalCategory}
+                  onChange={e => setEditingSession({ ...editingSession, goalCategory: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Atividades Trabalhadas</label>
+                <textarea
+                  rows={2}
+                  value={editingSession.activities}
+                  onChange={e => setEditingSession({ ...editingSession, activities: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Evolução Clínica & Resposta</label>
+                <textarea
+                  rows={2}
+                  value={editingSession.evolution}
+                  onChange={e => setEditingSession({ ...editingSession, evolution: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Desafios / Dificuldades</label>
+                <textarea
+                  rows={1}
+                  value={editingSession.difficulties || ''}
+                  onChange={e => setEditingSession({ ...editingSession, difficulties: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Orientações para Pais & Escola</label>
+                <textarea
+                  rows={2}
+                  value={editingSession.recommendations || ''}
+                  onChange={e => setEditingSession({ ...editingSession, recommendations: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Próximos Objetivos</label>
+                <input
+                  type="text"
+                  value={editingSession.nextGoals || ''}
+                  onChange={e => setEditingSession({ ...editingSession, nextGoals: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingSession(null)}
+                  className="blob-button bg-slate-100 text-slate-700 w-1/2 !py-2.5 text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="blob-button bg-sky-500 text-white w-1/2 !py-2.5 text-xs font-bold"
+                >
+                  Atualizar Sessão
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: EDITAR META PEI */}
+      {/* ========================================================================= */}
+      {editingGoal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xl font-black font-kids text-slate-900">Editar Meta do PEI</h3>
+              <button onClick={() => setEditingGoal(null)} className="p-1 rounded-full text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Atualize dados, status e porcentagem de domínio.</p>
+
+            <form onSubmit={handleUpdateGoal} className="space-y-3 text-xs font-bold font-kids">
+              <div>
+                <label className="text-slate-600 block mb-1">Título da Meta</label>
+                <input
+                  type="text"
+                  value={editingGoal.name}
+                  onChange={e => setEditingGoal({ ...editingGoal, name: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Área / Categoria</label>
+                <select
+                  value={editingGoal.cat}
+                  onChange={e => setEditingGoal({ ...editingGoal, cat: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                >
+                  <option value="Comunicação">Comunicação & Linguagem</option>
+                  <option value="Sensorial & Motor">Sensorial & Motor</option>
+                  <option value="Autonomia & Rotina">Autonomia & Rotina</option>
+                  <option value="Socialização">Socialização & Brincar</option>
+                  <option value="Cognitivo & Pedagógico">Cognitivo & Pedagógico</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Progresso Atual ({editingGoal.nivel}%)</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={editingGoal.nivel}
+                  onChange={e => setEditingGoal({ ...editingGoal, nivel: Number(e.target.value) })}
+                  className="w-full accent-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Status</label>
+                <select
+                  value={editingGoal.status}
+                  onChange={e => setEditingGoal({ ...editingGoal, status: e.target.value as 'in_progress' | 'achieved' })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                >
+                  <option value="in_progress">Em Progresso</option>
+                  <option value="achieved">Conquistado 🎉</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Descrição / Critério de Sucesso</label>
+                <textarea
+                  rows={2}
+                  value={editingGoal.description}
+                  onChange={e => setEditingGoal({ ...editingGoal, description: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Profissional Responsável</label>
+                <input
+                  type="text"
+                  value={editingGoal.responsibleProf}
+                  onChange={e => setEditingGoal({ ...editingGoal, responsibleProf: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingGoal(null)}
+                  className="blob-button bg-slate-100 text-slate-700 w-1/2 !py-2.5 text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="blob-button bg-emerald-500 text-white w-1/2 !py-2.5 text-xs font-bold"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: EDITAR REGISTRO ESCOLAR */}
+      {/* ========================================================================= */}
+      {editingSchool && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xl font-black font-kids text-slate-900">Editar Registro Escolar</h3>
+              <button onClick={() => setEditingSchool(null)} className="p-1 rounded-full text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Acesso total da equipe pedagógica e administradores.</p>
+
+            <form onSubmit={handleUpdateSchool} className="space-y-3 text-xs font-bold font-kids">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-600 block mb-1">Professora / Mediadora</label>
+                  <input
+                    type="text"
+                    value={editingSchool.teacher}
+                    onChange={e => setEditingSchool({ ...editingSchool, teacher: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 block mb-1">Data</label>
+                  <input
+                    type="text"
+                    value={editingSchool.date}
+                    onChange={e => setEditingSchool({ ...editingSchool, date: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Atividades Pedagógicas</label>
+                <textarea
+                  rows={2}
+                  value={editingSchool.atividade}
+                  onChange={e => setEditingSchool({ ...editingSchool, atividade: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Socialização & Interação</label>
+                <textarea
+                  rows={2}
+                  value={editingSchool.socializacao}
+                  onChange={e => setEditingSchool({ ...editingSchool, socializacao: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Alimentação & Lanche</label>
+                <input
+                  type="text"
+                  value={editingSchool.alimentacao}
+                  onChange={e => setEditingSchool({ ...editingSchool, alimentacao: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Observações Gerais</label>
+                <input
+                  type="text"
+                  value={editingSchool.humor || ''}
+                  onChange={e => setEditingSchool({ ...editingSchool, humor: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingSchool(null)}
+                  className="blob-button bg-slate-100 text-slate-700 w-1/2 !py-2.5 text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="blob-button bg-amber-500 text-white w-1/2 !py-2.5 text-xs font-bold"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: EDITAR AGENDAMENTO */}
+      {/* ========================================================================= */}
+      {editingAgenda && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xl font-black font-kids text-slate-900">Editar Agendamento</h3>
+              <button onClick={() => setEditingAgenda(null)} className="p-1 rounded-full text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Atualize informações de data, hora ou profissional.</p>
+
+            <form onSubmit={handleUpdateAgenda} className="space-y-3 text-xs font-bold font-kids">
+              <div>
+                <label className="text-slate-600 block mb-1">Especialidade / Terapia</label>
+                <input
+                  type="text"
+                  value={editingAgenda.tipo}
+                  onChange={e => setEditingAgenda({ ...editingAgenda, tipo: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Profissional Responsável</label>
+                <input
+                  type="text"
+                  value={editingAgenda.who}
+                  onChange={e => setEditingAgenda({ ...editingAgenda, who: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-600 block mb-1">Dia da Semana</label>
+                  <input
+                    type="text"
+                    value={editingAgenda.day}
+                    onChange={e => setEditingAgenda({ ...editingAgenda, day: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 block mb-1">Horário</label>
+                  <input
+                    type="text"
+                    value={editingAgenda.time}
+                    onChange={e => setEditingAgenda({ ...editingAgenda, time: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Local / Sala</label>
+                <input
+                  type="text"
+                  value={editingAgenda.local}
+                  onChange={e => setEditingAgenda({ ...editingAgenda, local: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingAgenda(null)}
+                  className="blob-button bg-slate-100 text-slate-700 w-1/2 !py-2.5 text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="blob-button bg-indigo-500 text-white w-1/2 !py-2.5 text-xs font-bold"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: NOVO DOCUMENTO */}
+      {/* ========================================================================= */}
+      {showDocModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xl font-black font-kids text-slate-900">Novo Laudo ou Documento</h3>
+              <button onClick={() => setShowDocModal(false)} className="p-1 rounded-full text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Adicione um novo registro documental ao prontuário do Ian.</p>
+
+            <form onSubmit={handleAddDocument} className="space-y-3 text-xs font-bold font-kids">
+              <div>
+                <label className="text-slate-600 block mb-1">Título do Documento</label>
+                <input
+                  type="text"
+                  value={newDoc.nome}
+                  onChange={e => setNewDoc({ ...newDoc, nome: e.target.value })}
+                  placeholder="Ex: Laudo Fonoaudiológico Semestral"
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Categoria</label>
+                <select
+                  value={newDoc.cat}
+                  onChange={e => setNewDoc({ ...newDoc, cat: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                >
+                  <option value="Relatório Clínico">Relatório Clínico</option>
+                  <option value="Laudo Diagnóstico">Laudo Diagnóstico</option>
+                  <option value="PEI Escolar">PEI Escolar</option>
+                  <option value="Avaliação Neuropsicológica">Avaliação Neuropsicológica</option>
+                  <option value="Receituário / Prescrição">Receituário / Prescrição</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-600 block mb-1">Autor / Responsável</label>
+                  <input
+                    type="text"
+                    value={newDoc.author}
+                    onChange={e => setNewDoc({ ...newDoc, author: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 block mb-1">Data de Emissão</label>
+                  <input
+                    type="text"
+                    value={newDoc.data}
+                    onChange={e => setNewDoc({ ...newDoc, data: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Link ou URL do Arquivo (Opcional)</label>
+                <input
+                  type="text"
+                  value={newDoc.url}
+                  onChange={e => setNewDoc({ ...newDoc, url: e.target.value })}
+                  placeholder="https://..."
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDocModal(false)}
+                  className="blob-button bg-slate-100 text-slate-700 w-1/2 !py-2.5 text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="blob-button bg-sky-500 text-white w-1/2 !py-2.5 text-xs font-bold"
+                >
+                  Arquivar Documento
                 </button>
               </div>
             </form>

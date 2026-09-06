@@ -159,3 +159,29 @@ export interface MomentRecord {
   tags?: string[];
   createdAt: string;
 }
+
+export interface DirectChannel {
+  id: string;
+  participantId: string;
+  participantName: string;
+  participantRole: UserRole;
+  participantRoleTitle: string;
+  participantAvatar?: string;
+  lastMessage?: string;
+  lastMessageTime?: string;
+  unreadCount?: number;
+  createdAt: string;
+}
+
+export interface DirectMessage {
+  id: string;
+  channelId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: UserRole;
+  senderRoleTitle?: string;
+  text: string;
+  tag?: string;
+  timestamp: string;
+  createdAt?: string;
+}

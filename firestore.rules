@@ -125,6 +125,17 @@ service cloud.firestore {
       allow update, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.senderId);
     }
 
+    // Direct Channels (Terapeutas / Escola ↔ Pais)
+    match /direct_channels/{channelId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Direct Messages (Mensagens Instantâneas Individuais)
+    match /direct_messages/{msgId} {
+      allow read, write: if isAuthenticated();
+      allow delete: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.senderId);
+    }
+
     // Admin Logs
     match /logs/{logId} {
       allow read: if isAdmin();
