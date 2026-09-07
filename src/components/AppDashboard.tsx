@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   ArrowLeft, 
@@ -66,12 +66,15 @@ import {
   deleteAgendaEventFromFirestore,
   toggleAgendaInFirestore,
   subscribeToAchievements,
+  addAchievementToFirestore,
+  deleteAchievementFromFirestore,
   subscribeToDocuments,
   addDocumentToFirestore,
   deleteDocumentFromFirestore,
   subscribeToMoments,
   addMomentToFirestore,
-  deleteMomentFromFirestore
+  deleteMomentFromFirestore,
+  clearAllAppData
 } from '../lib/firebaseSync';
 import { Child, TherapySession, Goal, Achievement, DiaryRecord, SchoolRecord, AgendaEvent, DocumentRecord, MomentRecord, UserRole } from '../types';
 import { DailyObservationsDiary } from './DailyObservationsDiary';
@@ -157,6 +160,8 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   const [showSchoolModal, setShowSchoolModal] = useState(false);
   const [showAgendaModal, setShowAgendaModal] = useState(false);
   const [showDocModal, setShowDocModal] = useState(false);
+  const [showAchievementModal, setShowAchievementModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [showEditProntuario, setShowEditProntuario] = useState(false);
 
   // Modals for Editing (Acesso Total Admin / Responsáveis)
@@ -218,14 +223,46 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
     local: ''
   });
 
-  // Open modal helpers that ensure clean empty fields
+  const [newAchievement, setNewAchievement] = useState({
+    title: '',
+    cat: 'Comunicação',
+    date: new Date().toLocaleDateString('pt-BR'),
+    desc: '',
+    emoji: '🎉',
+    photoUrl: ''
+  });
+
+  // Role-Based Access Control:
+  // Admin & Parents have full clinical overview.
+  // Therapists see strictly their own recorded session history to preserve clinical privacy.
+  const visibleSessions = useMemo(() => {
+    if (isAdmin || isParent) {
+      return sessions;
+    }
+    if (isTherapist) {
+      const therapistName = (systemUser?.name || '').toLowerCase();
+      const therapistFirst = therapistName.split(' ')[0] || '';
+      return sessions.filter(sess => {
+        if (sess.professionalId === systemUser?.id) return true;
+        const profName = (sess.professionalName || '').toLowerCase();
+        if (therapistFirst && profName.includes(therapistFirst)) return true;
+        return false;
+      });
+    }
+    return sessions;
+  }, [sessions, isAdmin, isParent, isTherapist, systemUser]);
+
+  // Open modal helpers that ensure clean and context-aware pre-filled fields
   const openNewSessionModal = () => {
+    const today = new Date();
+    const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+    const formattedTime = `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`;
     setNewSession({
-      professionalName: '',
-      role: '',
-      date: '',
-      time: '',
-      goalCategory: '',
+      professionalName: isTherapist ? (systemUser?.name || '') : (systemUser?.name || ''),
+      role: isTherapist ? (systemUser?.roleTitle || 'Especialista Multidisciplinar') : '',
+      date: formattedDate,
+      time: formattedTime,
+      goalCategory: 'Comunicação e Linguagem',
       activities: '',
       evolution: '',
       nextGoals: '',
@@ -238,18 +275,20 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   const openNewGoalModal = () => {
     setNewGoal({
       name: '',
-      cat: '',
+      cat: 'Comunicação',
       nivel: 0,
       description: '',
-      responsibleProf: ''
+      responsibleProf: isTherapist ? `${systemUser?.name || ''} (${systemUser?.roleTitle || 'Terapia'})` : ''
     });
     setShowGoalModal(true);
   };
 
   const openNewSchoolModal = () => {
+    const today = new Date();
+    const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
     setNewSchool({
-      date: '',
-      teacher: '',
+      date: formattedDate,
+      teacher: isSchool ? (systemUser?.name || 'Professora Mediadora') : '',
       atividade: '',
       participacao: '',
       socializacao: '',
@@ -263,13 +302,15 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   };
 
   const openNewAgendaModal = () => {
+    const today = new Date();
+    const days = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
     setNewAgenda({
-      day: '',
-      date: '',
-      time: '',
-      tipo: '',
-      who: '',
-      local: ''
+      day: days[today.getDay()],
+      date: `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`,
+      time: '14:00',
+      tipo: isTherapist ? (systemUser?.roleTitle || 'Atendimento Clínico') : '',
+      who: isTherapist ? (systemUser?.name || '') : '',
+      local: 'Consultório Multidisciplinar'
     });
     setShowAgendaModal(true);
   };
@@ -277,9 +318,9 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   const openNewDocModal = () => {
     setNewDoc({
       nome: '',
-      cat: '',
-      author: '',
-      data: '',
+      cat: 'Relatório Terapêutico',
+      author: systemUser?.name || '',
+      data: new Date().toLocaleDateString('pt-BR'),
       url: ''
     });
     setShowDocModal(true);
@@ -425,7 +466,6 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   };
 
   const handleDeleteSession = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este atendimento permanentemente?')) return;
     await deleteSessionFromFirestore(id);
     setSessions(prev => prev.filter(s => s.id !== id));
   };
@@ -440,7 +480,6 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   };
 
   const handleDeleteGoal = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta meta PEI permanentemente?')) return;
     await deleteGoalFromFirestore(id);
     setGoals(prev => prev.filter(g => g.id !== id));
   };
@@ -455,7 +494,6 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   };
 
   const handleDeleteSchool = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este registro escolar?')) return;
     await deleteSchoolRecordFromFirestore(id);
     setSchoolRecords(prev => prev.filter(r => r.id !== id));
   };
@@ -470,9 +508,89 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   };
 
   const handleDeleteAgenda = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este agendamento?')) return;
     await deleteAgendaEventFromFirestore(id);
     setAgenda(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleAddAchievement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAchievement.title.trim()) return;
+    const achPayload = {
+      childId: childData.id,
+      title: newAchievement.title.trim(),
+      cat: newAchievement.cat,
+      date: newAchievement.date || new Date().toLocaleDateString('pt-BR'),
+      desc: newAchievement.desc.trim(),
+      emoji: newAchievement.emoji || '🎉',
+      photoUrl: newAchievement.photoUrl.trim() || undefined
+    };
+    const saved = await addAchievementToFirestore(achPayload);
+    setAchievements(prev => [saved, ...prev.filter(a => a.id !== saved.id)]);
+    setShowAchievementModal(false);
+    setNewAchievement({
+      title: '',
+      cat: 'Comunicação',
+      date: new Date().toLocaleDateString('pt-BR'),
+      desc: '',
+      emoji: '🎉',
+      photoUrl: ''
+    });
+    triggerCelebration('Nova conquista celebrada!');
+  };
+
+  const handleDeleteAchievement = async (id: string) => {
+    await deleteAchievementFromFirestore(id);
+    setAchievements(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleClearProntuarioFields = () => {
+    setChildData({
+      id: childData.id,
+      name: '',
+      parents: '',
+      birth: '',
+      birthDateFull: '',
+      age: '',
+      diagnosis: '',
+      photoUrl: '',
+      bloodType: '',
+      emergencyContact: '',
+      allergies: '',
+      schoolName: '',
+      notes: '',
+      updatedAt: new Date().toISOString()
+    });
+  };
+
+  const handleResetAllDataToBlank = async () => {
+    clearAllAppData();
+    const blankChild: Child = {
+      id: initialChildData.id,
+      name: '',
+      parents: '',
+      birth: '',
+      birthDateFull: '',
+      age: '',
+      diagnosis: '',
+      photoUrl: '',
+      bloodType: '',
+      emergencyContact: '',
+      allergies: '',
+      schoolName: '',
+      notes: '',
+      updatedAt: new Date().toISOString()
+    };
+    await saveChildToFirestore(blankChild);
+    setChildData(blankChild);
+    setSessions([]);
+    setGoals([]);
+    setSchoolRecords([]);
+    setAgenda([]);
+    setDocuments([]);
+    setAchievements([]);
+    setMoments([]);
+    setShowResetModal(false);
+    triggerCelebration('Frontend limpo com sucesso! Todos os dados estão prontos para preenchimento em branco.');
   };
 
   const handleAddDocument = async (e: React.FormEvent) => {
@@ -501,38 +619,38 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
   };
 
   const handleDeleteDocument = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este documento?')) return;
     await deleteDocumentFromFirestore(id);
     setDocuments(prev => prev.filter(d => d.id !== id));
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#EAF5FC] via-[#F4FBFF] to-[#EAF5FC] text-slate-800 font-sans pb-20">
+    <div className="min-h-screen bg-gradient-to-b from-[#EAF5FC] via-[#F4FBFF] to-[#EAF5FC] text-slate-800 font-sans pb-28 sm:pb-20">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-sky-100 shadow-sm px-4 md:px-8 py-3.5">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-sky-100 shadow-sm px-3 sm:px-6 md:px-8 py-2.5 sm:py-3.5">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={onBackToSite}
-              className="p-2 rounded-2xl bg-sky-50 text-sky-700 hover:bg-sky-100 transition-colors flex items-center gap-1.5 text-xs font-bold font-kids"
+              className="p-1.5 sm:p-2 rounded-2xl bg-sky-50 text-sky-700 hover:bg-sky-100 transition-colors flex items-center gap-1.5 text-xs font-bold font-kids shrink-0"
               title="Voltar ao portal público"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Voltar ao Site</span>
+              <span className="hidden sm:inline">Voltar ao Site</span>
+              <span className="sm:hidden">Site</span>
             </button>
 
-            <div className="h-6 w-px bg-slate-200"></div>
+            <div className="h-5 sm:h-6 w-px bg-slate-200"></div>
 
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center text-white font-bold text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
                 IP
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-sm font-black font-kids text-slate-900 leading-none">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h1 className="text-xs sm:text-sm font-black font-kids text-slate-900 leading-none truncate">
                     Central do Ian
                   </h1>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold font-kids">
+                  <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] sm:text-[10px] font-bold font-kids shrink-0">
                     <span className="relative flex h-1.5 w-1.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
@@ -541,14 +659,14 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
                     <span>Firebase Ao Vivo</span>
                   </span>
                 </div>
-                <span className="text-[10px] text-sky-600 font-bold">Acompanhamento Multidisciplinar</span>
+                <span className="text-[10px] text-sky-600 font-bold hidden sm:block">Acompanhamento Multidisciplinar</span>
               </div>
             </div>
           </div>
 
           {/* User Profile & Demo Switcher */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Quick Demo Switcher */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Quick Demo Switcher (Desktop & Tablet) */}
             <div className="hidden sm:flex items-center gap-1 bg-slate-100 p-1 rounded-full text-[11px] font-bold font-kids">
               <span className="px-2 text-slate-400">Ver como:</span>
               <button
@@ -578,7 +696,7 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
             </div>
 
             {/* Current user pill */}
-            <div className="flex items-center gap-2 pl-2">
+            <div className="flex items-center gap-1.5 pl-1 sm:pl-2">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-slate-800 leading-tight">
                   {systemUser?.name || user?.displayName || 'Marcos Paterra'}
@@ -590,23 +708,52 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
 
               <button
                 onClick={() => signOut()}
-                className="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                className="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
                 title="Desconectar"
               >
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
           </div>
+
+          {/* Mobile Role Switcher Bar */}
+          <div className="flex sm:hidden items-center justify-between gap-1 bg-slate-100 p-1 rounded-2xl text-[10px] font-bold font-kids w-full mt-1">
+            <span className="px-1 text-slate-400 text-[9px]">Ver como:</span>
+            <button
+              onClick={() => switchRoleDemo('admin', 'Marcos Paterra', 'Pai & Administrador')}
+              className={`flex-1 py-1 rounded-xl transition-all text-center ${
+                systemUser?.role === 'admin' ? 'bg-emerald-500 text-white shadow-2xs' : 'text-slate-600'
+              }`}
+            >
+              Pai (Admin)
+            </button>
+            <button
+              onClick={() => switchRoleDemo('therapist', 'Dra. Karen Camargo', 'Neuropediatra')}
+              className={`flex-1 py-1 rounded-xl transition-all text-center ${
+                systemUser?.role === 'therapist' ? 'bg-sky-500 text-white shadow-2xs' : 'text-slate-600'
+              }`}
+            >
+              Terapeuta
+            </button>
+            <button
+              onClick={() => switchRoleDemo('school', 'Profª Mariana', 'Escola')}
+              className={`flex-1 py-1 rounded-xl transition-all text-center ${
+                systemUser?.role === 'school' ? 'bg-amber-500 text-white shadow-2xs' : 'text-slate-600'
+              }`}
+            >
+              Escola
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Hero Child Summary Banner */}
       <div className="max-w-7xl mx-auto px-4 md:px-8 mt-6">
-        <div className="bg-white rounded-[2.5rem] p-6 md:p-8 shadow-sm border-2 border-sky-100 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+        <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-6 md:p-8 shadow-sm border-2 border-sky-100 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
           <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-sky-100/50 rounded-full blur-2xl pointer-events-none"></div>
           
-          <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left z-10">
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-3xl overflow-hidden border-4 border-white shadow-lg bg-sky-100 shrink-0">
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 text-center sm:text-left z-10 w-full md:w-auto">
+            <div className="relative w-20 h-20 sm:w-28 sm:h-28 rounded-3xl overflow-hidden border-4 border-white shadow-lg bg-sky-100 shrink-0">
               <img 
                 src="https://ianzinhopaterraoficial.com.br/wp-content/uploads/2026/07/ianfone.png" 
                 alt="Ian Paterra" 
@@ -614,51 +761,51 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
               />
             </div>
 
-            <div>
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1.5">
-                <h2 className="text-2xl sm:text-3xl font-black font-kids text-slate-900">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 sm:gap-2 mb-1.5">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-black font-kids text-slate-900">
                   {childData.name}
                 </h2>
-                <span className="px-3 py-0.5 rounded-full bg-brand-blue-light text-brand-blue-dark font-kids text-xs font-bold">
+                <span className="px-2.5 py-0.5 rounded-full bg-brand-blue-light text-brand-blue-dark font-kids text-xs font-bold">
                   {childData.age}
                 </span>
-                <span className="px-3 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-kids text-xs font-bold">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-kids text-xs font-bold">
                   Tipo {childData.bloodType}
                 </span>
               </div>
 
-              <p className="text-sm font-semibold text-slate-600 mb-1">
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 mb-1">
                 <strong>Diagnóstico:</strong> {childData.diagnosis}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-[11px] sm:text-xs text-slate-500">
                 <strong>Pais:</strong> {childData.parents} • <strong>Escola:</strong> {childData.schoolName}
               </p>
             </div>
           </div>
 
           {/* Quick Metrics */}
-          <div className="flex items-center gap-4 z-10 w-full sm:w-auto justify-around sm:justify-end border-t sm:border-t-0 pt-4 sm:pt-0 border-slate-100">
-            <div className="text-center px-3 py-2 rounded-2xl bg-sky-50 border border-sky-100 min-w-20">
-              <span className="block text-xl font-black text-sky-600 font-kids">{sessions.length}</span>
+          <div className="grid grid-cols-2 sm:flex items-center gap-2 sm:gap-3 md:gap-4 z-10 w-full sm:w-auto justify-center sm:justify-end border-t sm:border-t-0 pt-4 sm:pt-0 border-slate-100">
+            <div className="text-center px-3 py-2 rounded-2xl bg-sky-50 border border-sky-100 min-w-[70px]">
+              <span className="block text-lg sm:text-xl font-black text-sky-600 font-kids">{sessions.length}</span>
               <span className="text-[10px] font-bold text-slate-500 uppercase">Sessões</span>
             </div>
-            <div className="text-center px-3 py-2 rounded-2xl bg-emerald-50 border border-emerald-100 min-w-20">
-              <span className="block text-xl font-black text-emerald-600 font-kids">{goals.length}</span>
+            <div className="text-center px-3 py-2 rounded-2xl bg-emerald-50 border border-emerald-100 min-w-[70px]">
+              <span className="block text-lg sm:text-xl font-black text-emerald-600 font-kids">{goals.length}</span>
               <span className="text-[10px] font-bold text-slate-500 uppercase">Metas PEI</span>
             </div>
-            <div className="text-center px-3 py-2 rounded-2xl bg-pink-50 border border-pink-100 min-w-20">
-              <span className="block text-xl font-black text-pink-600 font-kids">{achievements.length}</span>
+            <div className="text-center px-3 py-2 rounded-2xl bg-pink-50 border border-pink-100 min-w-[70px]">
+              <span className="block text-lg sm:text-xl font-black text-pink-600 font-kids">{achievements.length}</span>
               <span className="text-[10px] font-bold text-slate-500 uppercase">Marcos</span>
             </div>
-            <div className="text-center px-3 py-2 rounded-2xl bg-purple-50 border border-purple-100 min-w-20">
-              <span className="block text-xl font-black text-purple-600 font-kids">{moments.length}</span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">Fotos/Momentos</span>
+            <div className="text-center px-3 py-2 rounded-2xl bg-purple-50 border border-purple-100 min-w-[70px]">
+              <span className="block text-lg sm:text-xl font-black text-purple-600 font-kids">{moments.length}</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase">Fotos</span>
             </div>
           </div>
         </div>
 
         {/* Tab Navigation Pill Bar */}
-        <div className="mt-6 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none font-kids text-xs font-bold">
+        <div className="mt-6 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none font-kids text-xs font-bold scroll-smooth -mx-4 px-4 md:mx-0 md:px-0">
           <button
             onClick={() => setActiveTab('prontuario')}
             className={`px-4 py-2.5 rounded-2xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
@@ -803,69 +950,164 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
                       <p className="text-xs text-slate-500">Dados cadastrais e referências médicas</p>
                     </div>
                   </div>
-                  {isParent && (
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setShowEditProntuario(!showEditProntuario)}
-                      className="text-xs font-bold font-kids text-sky-600 hover:text-sky-800 bg-sky-50 px-3 py-1.5 rounded-xl"
+                      onClick={() => setShowResetModal(true)}
+                      className="text-xs font-bold font-kids text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 rounded-xl transition-colors"
+                      title="Apagar dados e deixar o front-end todo em branco"
                     >
-                      {showEditProntuario ? 'Fechar Edição' : 'Editar Dados'}
+                      <Trash2 className="w-3.5 h-3.5 inline mr-1" />
+                      Deixar Front-end em Branco
                     </button>
-                  )}
+                    {(isAdmin || isParent) && (
+                      <button
+                        onClick={() => setShowEditProntuario(!showEditProntuario)}
+                        className="text-xs font-bold font-kids text-sky-600 hover:text-sky-800 bg-sky-50 px-3 py-1.5 rounded-xl transition-colors"
+                      >
+                        {showEditProntuario ? 'Fechar Edição' : 'Editar Dados da Criança'}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {showEditProntuario ? (
                   <div className="space-y-4 text-xs font-bold font-kids">
-                    <div>
-                      <label className="text-slate-600 mb-1 block">Nome da Criança</label>
-                      <input 
-                        type="text" 
-                        value={childData.name} 
-                        onChange={e => setChildData({ ...childData, name: e.target.value })}
-                        className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
-                      />
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-slate-600 mb-1 block">Nome Completo da Criança</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: Ian Paterra"
+                          value={childData.name} 
+                          onChange={e => setChildData({ ...childData, name: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-600 mb-1 block">Data de Nascimento</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: 14 de Março de 2021"
+                          value={childData.birthDateFull} 
+                          onChange={e => setChildData({ ...childData, birthDateFull: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-600 mb-1 block">Idade / Faixa Etária</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: 5 anos"
+                          value={childData.age} 
+                          onChange={e => setChildData({ ...childData, age: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-600 mb-1 block">Tipo Sanguíneo</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: O+"
+                          value={childData.bloodType} 
+                          onChange={e => setChildData({ ...childData, bloodType: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-600 mb-1 block">Pais / Responsáveis</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: Marcos Paterra & Família"
+                          value={childData.parents} 
+                          onChange={e => setChildData({ ...childData, parents: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-600 mb-1 block">Diagnóstico Clínico & CID</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: TEA Nível 1 de Suporte (CID 6A02.0)"
+                          value={childData.diagnosis} 
+                          onChange={e => setChildData({ ...childData, diagnosis: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-600 mb-1 block">Escola Atual / Instituição</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: Escola Municipal Aquarela"
+                          value={childData.schoolName} 
+                          onChange={e => setChildData({ ...childData, schoolName: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-600 mb-1 block">Contato de Emergência</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: (11) 98888-7777 - Marcos"
+                          value={childData.emergencyContact} 
+                          onChange={e => setChildData({ ...childData, emergencyContact: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="text-slate-600 mb-1 block">URL da Foto de Perfil (Opcional)</label>
+                        <input 
+                          type="text" 
+                          placeholder="https://..."
+                          value={childData.photoUrl || ''} 
+                          onChange={e => setChildData({ ...childData, photoUrl: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="text-slate-600 mb-1 block">Alergias, Sensibilidades & Restrições</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: Sensibilidade a ruídos agudos, sem alergias alimentares conhecidas"
+                          value={childData.allergies} 
+                          onChange={e => setChildData({ ...childData, allergies: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="text-slate-600 mb-1 block">Notas do Desenvolvimento & Estilo de Aprendizagem</label>
+                        <textarea 
+                          rows={3}
+                          placeholder="Observações clínicas, interesses hiperfocados, canais sensoriais preferidos..."
+                          value={childData.notes} 
+                          onChange={e => setChildData({ ...childData, notes: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-slate-600 mb-1 block">Diagnóstico & Responsável</label>
-                      <input 
-                        type="text" 
-                        value={childData.diagnosis} 
-                        onChange={e => setChildData({ ...childData, diagnosis: e.target.value })}
-                        className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
-                      />
+
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveProntuario}
+                        className="blob-button bg-emerald-500 text-white !py-2 !px-4 text-xs font-bold font-kids shadow-sm hover:bg-emerald-600 transition-colors"
+                      >
+                        Salvar Alterações no Firestore
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearProntuarioFields}
+                        className="px-3 py-2 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 text-xs font-bold font-kids transition-colors"
+                      >
+                        Limpar Campos da Criança (Em Branco)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowEditProntuario(false)}
+                        className="px-3 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-bold font-kids transition-colors"
+                      >
+                        Cancelar
+                      </button>
                     </div>
-                    <div>
-                      <label className="text-slate-600 mb-1 block">Contato de Emergência</label>
-                      <input 
-                        type="text" 
-                        value={childData.emergencyContact} 
-                        onChange={e => setChildData({ ...childData, emergencyContact: e.target.value })}
-                        className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-slate-600 mb-1 block">Alergias & Restrições</label>
-                      <input 
-                        type="text" 
-                        value={childData.allergies} 
-                        onChange={e => setChildData({ ...childData, allergies: e.target.value })}
-                        className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-slate-600 mb-1 block">Notas do Desenvolvimento</label>
-                      <textarea 
-                        rows={3}
-                        value={childData.notes} 
-                        onChange={e => setChildData({ ...childData, notes: e.target.value })}
-                        className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
-                      />
-                    </div>
-                    <button
-                      onClick={handleSaveProntuario}
-                      className="blob-button bg-emerald-500 text-white !py-2 !px-4 text-xs font-bold font-kids shadow-sm hover:bg-emerald-600 transition-colors"
-                    >
-                      Salvar Alterações no Firestore
-                    </button>
                   </div>
                 ) : (
                   <div className="grid sm:grid-cols-2 gap-4 text-sm">
@@ -1011,7 +1253,7 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
 
               {(isTherapist || isAdmin) && (
                 <button
-                  onClick={() => setShowSessionModal(true)}
+                  onClick={openNewSessionModal}
                   className="blob-button bg-sky-500 text-white !py-2.5 !px-5 text-xs font-bold shadow-md shadow-sky-500/20"
                 >
                   <Plus className="w-4 h-4 mr-1" />
@@ -1020,95 +1262,123 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
               )}
             </div>
 
+            {/* Therapist Individual Scope Notice */}
+            {isTherapist && !isAdmin && (
+              <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-sky-50 border border-sky-200/80 text-sky-800 text-xs font-bold font-kids">
+                <Stethoscope className="w-4 h-4 text-sky-600 shrink-0" />
+                <span>Modo Terapeuta: Exibindo histórico individual dos seus atendimentos ({systemUser?.name || 'Profissional'})</span>
+              </div>
+            )}
+
             {/* Sessions List */}
             <div className="space-y-4">
-              {sessions.map(sess => (
-                <div key={sess.id} className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-sm hover:border-sky-300 transition-all">
-                  <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold font-kids text-sm">
-                        {sess.professionalName.split(' ')[0][0]}
-                        {sess.professionalName.split(' ')[1] ? sess.professionalName.split(' ')[1][0] : ''}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-black font-kids text-base text-slate-900">{sess.professionalName}</h4>
-                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 font-kids">
-                            {sess.role}
-                          </span>
+              {visibleSessions.length === 0 ? (
+                <div className="bg-white rounded-[2rem] p-8 text-center border border-slate-200">
+                  <Stethoscope className="w-10 h-10 text-sky-400 mx-auto mb-2" />
+                  <h4 className="font-kids font-bold text-slate-800 text-base">Nenhum atendimento registrado com seu perfil ainda</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                    {isTherapist 
+                      ? 'Adicione a primeira evolução clínica do Ian sob sua responsabilidade através do botão abaixo.'
+                      : 'Nenhum atendimento clínico cadastrado no momento.'}
+                  </p>
+                  {(isTherapist || isAdmin) && (
+                    <button
+                      onClick={openNewSessionModal}
+                      className="mt-4 blob-button bg-sky-500 text-white !py-2 !px-4 text-xs font-bold font-kids inline-flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Registrar Primeiro Atendimento</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                visibleSessions.map(sess => (
+                  <div key={sess.id} className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-sm hover:border-sky-300 transition-all">
+                    <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold font-kids text-sm">
+                          {(sess.professionalName || 'P').slice(0, 2).toUpperCase()}
                         </div>
-                        <p className="text-xs text-slate-400 font-medium">Área: {sess.goalCategory}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-3 text-xs font-bold font-kids text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl">
-                        <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {sess.date}</span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {sess.time}</span>
-                      </div>
-
-                      {/* Admin / Prof Edit & Delete */}
-                      {(isAdmin || isTherapist) && (
-                        <button
-                          onClick={() => setEditingSession(sess)}
-                          className="p-1.5 rounded-xl bg-slate-100 text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors"
-                          title="Editar Atendimento"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      {isAdmin && (
-                        <button
-                          onClick={() => handleDeleteSession(sess.id)}
-                          className="p-1.5 rounded-xl bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                          title="Excluir Atendimento (Admin)"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-4 mt-4 text-xs">
-                    <div className="space-y-3">
-                      <div>
-                        <span className="font-bold text-slate-400 uppercase text-[10px] block">Atividades Realizadas</span>
-                        <p className="text-slate-700 leading-relaxed mt-0.5">{sess.activities}</p>
-                      </div>
-                      <div>
-                        <span className="font-bold text-sky-600 uppercase text-[10px] block">Evolução Observada</span>
-                        <p className="text-slate-800 font-medium leading-relaxed mt-0.5 bg-sky-50/60 p-3 rounded-xl border border-sky-100">
-                          {sess.evolution}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      {sess.difficulties && (
                         <div>
-                          <span className="font-bold text-amber-600 uppercase text-[10px] block">Desafios / Dificuldades</span>
-                          <p className="text-slate-700 leading-relaxed mt-0.5">{sess.difficulties}</p>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-black font-kids text-base text-slate-900">{sess.professionalName || 'Profissional'}</h4>
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 font-kids">
+                              {sess.role}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 font-medium">Área: {sess.goalCategory}</p>
                         </div>
-                      )}
-                      {sess.recommendations && (
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3 text-xs font-bold font-kids text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl">
+                          <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {sess.date}</span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {sess.time}</span>
+                        </div>
+
+                        {/* Admin / Parent / Prof Author Edit */}
+                        {(isAdmin || isParent || (isTherapist && (sess.professionalId === systemUser?.id || (sess.professionalName || '').toLowerCase().includes((systemUser?.name || '').toLowerCase().split(' ')[0])))) && (
+                          <button
+                            onClick={() => setEditingSession(sess)}
+                            className="p-1.5 rounded-xl bg-slate-100 text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors"
+                            title="Editar Atendimento"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {(isAdmin || isParent) && (
+                          <button
+                            onClick={() => handleDeleteSession(sess.id)}
+                            className="p-1.5 rounded-xl bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Excluir Atendimento"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4 mt-4 text-xs">
+                      <div className="space-y-3">
                         <div>
-                          <span className="font-bold text-emerald-600 uppercase text-[10px] block">Orientações para a Família & Escola</span>
-                          <p className="text-slate-700 leading-relaxed mt-0.5 bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100">
-                            {sess.recommendations}
+                          <span className="font-bold text-slate-400 uppercase text-[10px] block">Atividades Realizadas</span>
+                          <p className="text-slate-700 leading-relaxed mt-0.5">{sess.activities}</p>
+                        </div>
+                        <div>
+                          <span className="font-bold text-sky-600 uppercase text-[10px] block">Evolução Observada</span>
+                          <p className="text-slate-800 font-medium leading-relaxed mt-0.5 bg-sky-50/60 p-3 rounded-xl border border-sky-100">
+                            {sess.evolution}
                           </p>
                         </div>
-                      )}
-                      {sess.nextGoals && (
-                        <div>
-                          <span className="font-bold text-indigo-600 uppercase text-[10px] block">Próximos Objetivos da Terapia</span>
-                          <p className="text-slate-700 leading-relaxed mt-0.5">{sess.nextGoals}</p>
-                        </div>
-                      )}
+                      </div>
+
+                      <div className="space-y-3">
+                        {sess.difficulties && (
+                          <div>
+                            <span className="font-bold text-amber-600 uppercase text-[10px] block">Desafios / Dificuldades</span>
+                            <p className="text-slate-700 leading-relaxed mt-0.5">{sess.difficulties}</p>
+                          </div>
+                        )}
+                        {sess.recommendations && (
+                          <div>
+                            <span className="font-bold text-emerald-600 uppercase text-[10px] block">Orientações para a Família & Escola</span>
+                            <p className="text-slate-700 leading-relaxed mt-0.5 bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100">
+                              {sess.recommendations}
+                            </p>
+                          </div>
+                        )}
+                        {sess.nextGoals && (
+                          <div>
+                            <span className="font-bold text-indigo-600 uppercase text-[10px] block">Próximos Objetivos da Terapia</span>
+                            <p className="text-slate-700 leading-relaxed mt-0.5">{sess.nextGoals}</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
@@ -1445,49 +1715,90 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-[2rem] border border-slate-200">
               <div>
                 <h3 className="text-2xl font-black font-kids text-slate-900">Marcos & Conquistas Comemoradas</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Cada passo do Ian é uma vitória enorme cheia de orgulho e esperança</p>
+                <p className="text-xs text-slate-500 mt-0.5">Cada passo da criança é uma vitória enorme cheia de orgulho e esperança</p>
               </div>
 
-              <button
-                onClick={() => triggerCelebration('Parabéns Ian!')}
-                className="blob-button bg-gradient-to-r from-pink-500 to-amber-500 text-white !py-2.5 !px-5 text-xs font-bold shadow-lg"
-              >
-                <Sparkles className="w-4 h-4 mr-1" />
-                <span>Soltar Chuva de Confetes 🎊</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {(isAdmin || isParent || isTherapist) && (
+                  <button
+                    onClick={() => setShowAchievementModal(true)}
+                    className="blob-button bg-pink-500 text-white !py-2.5 !px-5 text-xs font-bold shadow-md shadow-pink-500/20"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    <span>Nova Conquista</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => triggerCelebration('Parabéns!')}
+                  className="blob-button bg-gradient-to-r from-pink-500 to-amber-500 text-white !py-2.5 !px-4 text-xs font-bold shadow-lg"
+                >
+                  <Sparkles className="w-4 h-4 mr-1" />
+                  <span>Confetes 🎊</span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {achievements.map(ach => (
-                <div key={ach.id} className="kid-card flex flex-col justify-between">
-                  <div>
-                    {ach.photoUrl && (
-                      <div className="relative aspect-4/3 rounded-2xl overflow-hidden mb-4 border border-slate-100 shadow-inner">
-                        <img src={ach.photoUrl} alt={ach.title} className="w-full h-full object-cover" />
-                        <div className="absolute top-3 right-3 text-xl bg-white/90 p-1 rounded-xl shadow-sm">
-                          {ach.emoji}
-                        </div>
-                      </div>
-                    )}
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-pink-100 text-pink-700 font-kids">
-                      {ach.cat}
-                    </span>
-                    <h4 className="text-lg font-black font-kids text-slate-900 mt-2 mb-1">{ach.title}</h4>
-                    <p className="text-xs text-slate-600 leading-relaxed font-medium">{ach.desc}</p>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <span className="text-slate-400 font-bold">{ach.date}</span>
-                    <button
-                      onClick={() => triggerCelebration(ach.title)}
-                      className="text-xs font-bold font-kids text-pink-600 hover:text-pink-800 bg-pink-50 px-2.5 py-1 rounded-xl"
-                    >
-                      Comemorar 🎉
-                    </button>
-                  </div>
+            {achievements.length === 0 ? (
+              <div className="bg-white rounded-[2rem] p-12 border-2 border-dashed border-pink-200 text-center">
+                <div className="w-16 h-16 rounded-full bg-pink-50 text-pink-500 mx-auto flex items-center justify-center mb-4">
+                  <Sparkles className="w-8 h-8" />
                 </div>
-              ))}
-            </div>
+                <h4 className="text-lg font-black font-kids text-slate-800 mb-1">Nenhum marco cadastrado ainda</h4>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
+                  Cadastre o primeiro marco do desenvolvimento, autonomia ou conquista clínica!
+                </p>
+                <button
+                  onClick={() => setShowAchievementModal(true)}
+                  className="blob-button bg-pink-500 text-white !py-2 !px-4 text-xs font-bold font-kids shadow-sm inline-flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Cadastrar Primeira Conquista</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {achievements.map(ach => (
+                  <div key={ach.id} className="kid-card flex flex-col justify-between">
+                    <div>
+                      {ach.photoUrl && (
+                        <div className="relative aspect-4/3 rounded-2xl overflow-hidden mb-4 border border-slate-100 shadow-inner">
+                          <img src={ach.photoUrl} alt={ach.title} className="w-full h-full object-cover" />
+                          <div className="absolute top-3 right-3 text-xl bg-white/90 p-1 rounded-xl shadow-sm">
+                            {ach.emoji}
+                          </div>
+                        </div>
+                      )}
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-pink-100 text-pink-700 font-kids">
+                        {ach.cat}
+                      </span>
+                      <h4 className="text-lg font-black font-kids text-slate-900 mt-2 mb-1">{ach.title}</h4>
+                      <p className="text-xs text-slate-600 leading-relaxed font-medium">{ach.desc}</p>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                      <span className="text-slate-400 font-bold">{ach.date}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => triggerCelebration(ach.title)}
+                          className="text-xs font-bold font-kids text-pink-600 hover:text-pink-800 bg-pink-50 px-2 py-1 rounded-xl"
+                        >
+                          🎉
+                        </button>
+                        {(isAdmin || isParent) && (
+                          <button
+                            onClick={() => handleDeleteAchievement(ach.id)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Excluir Conquista"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -1513,43 +1824,64 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
               )}
             </div>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {documents.map(doc => (
-                <div key={doc.id} className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="w-10 h-10 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center">
-                        <FileText className="w-5 h-5" />
-                      </div>
-                      {isAdmin && (
-                        <button
-                          onClick={() => handleDeleteDocument(doc.id)}
-                          className="p-1.5 rounded-xl bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                          title="Excluir Documento (Admin)"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-kids">
-                      {doc.cat}
-                    </span>
-                    <h4 className="text-base font-black font-kids text-slate-900 mt-2">{doc.nome}</h4>
-                    <p className="text-xs text-slate-500 mt-1">Autor: {doc.author}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Emitido em: {doc.data}</p>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-100">
-                    <button
-                      onClick={() => alert(`Documento "${doc.nome}" arquivado com segurança na nuvem.`)}
-                      className="w-full py-2 rounded-xl bg-sky-50 text-sky-700 hover:bg-sky-100 font-bold font-kids text-xs transition-colors text-center"
-                    >
-                      Visualizar Arquivo
-                    </button>
-                  </div>
+            {documents.length === 0 ? (
+              <div className="bg-white rounded-[2rem] p-12 border-2 border-dashed border-sky-200 text-center">
+                <div className="w-16 h-16 rounded-full bg-sky-50 text-sky-500 mx-auto flex items-center justify-center mb-4">
+                  <FileText className="w-8 h-8" />
                 </div>
-              ))}
-            </div>
+                <h4 className="text-lg font-black font-kids text-slate-800 mb-1">Nenhum documento arquivado</h4>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
+                  Adicione laudos médicos, plano de ensino individualizado (PEI) ou relatórios de evolução.
+                </p>
+                {(isAdmin || isParent) && (
+                  <button
+                    onClick={() => setShowDocModal(true)}
+                    className="blob-button bg-sky-500 text-white !py-2 !px-4 text-xs font-bold font-kids shadow-sm inline-flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Adicionar Primeiro Documento</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {documents.map(doc => (
+                  <div key={doc.id} className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="w-10 h-10 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        {(isAdmin || isParent) && (
+                          <button
+                            onClick={() => handleDeleteDocument(doc.id)}
+                            className="p-1.5 rounded-xl bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Excluir Documento"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-kids">
+                        {doc.cat}
+                      </span>
+                      <h4 className="text-base font-black font-kids text-slate-900 mt-2">{doc.nome}</h4>
+                      <p className="text-xs text-slate-500 mt-1">Autor: {doc.author}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Emitido em: {doc.data}</p>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100">
+                      <button
+                        onClick={() => triggerCelebration(`Visualizando ${doc.nome}`)}
+                        className="w-full py-2 rounded-xl bg-sky-50 text-sky-700 hover:bg-sky-100 font-bold font-kids text-xs transition-colors text-center"
+                      >
+                        Visualizar Arquivo
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -2433,6 +2765,168 @@ export const AppDashboard: React.FC<AppDashboardProps> = ({ onBackToSite, onOpen
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: NOVA CONQUISTA / MARCO */}
+      {/* ========================================================================= */}
+      {showAchievementModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-2xl bg-pink-100 text-pink-600">
+                  <Sparkles className="w-5 h-5" />
+                </span>
+                <h3 className="text-xl font-black font-kids text-slate-900">Novo Marco & Conquista</h3>
+              </div>
+              <button onClick={() => setShowAchievementModal(false)} className="p-1 rounded-full text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Registre um passo importante no desenvolvimento e celebre a evolução!</p>
+
+            <form onSubmit={handleAddAchievement} className="space-y-3 text-xs font-bold font-kids">
+              <div>
+                <label className="text-slate-600 block mb-1">Título da Vitória</label>
+                <input
+                  type="text"
+                  value={newAchievement.title}
+                  onChange={e => setNewAchievement({ ...newAchievement, title: e.target.value })}
+                  placeholder="Ex: Pediu água espontaneamente com fala"
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-600 block mb-1">Área / Categoria</label>
+                  <select
+                    value={newAchievement.cat}
+                    onChange={e => setNewAchievement({ ...newAchievement, cat: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  >
+                    <option value="Comunicação">Comunicação</option>
+                    <option value="Autonomia">Autonomia</option>
+                    <option value="Sensorial">Sensorial</option>
+                    <option value="Socialização">Socialização</option>
+                    <option value="Motor">Motor & Físico</option>
+                    <option value="Escolar">Escolar / Cognitivo</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-600 block mb-1">Data da Conquista</label>
+                  <input
+                    type="text"
+                    value={newAchievement.date}
+                    onChange={e => setNewAchievement({ ...newAchievement, date: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Emoji do Marco</label>
+                <div className="flex gap-2 flex-wrap">
+                  {['🎉', '🌟', '🏆', '🗣️', '🧩', '👣', '🚀', '❤️'].map(em => (
+                    <button
+                      key={em}
+                      type="button"
+                      onClick={() => setNewAchievement({ ...newAchievement, emoji: em })}
+                      className={`w-9 h-9 text-lg rounded-xl flex items-center justify-center transition-all ${
+                        newAchievement.emoji === em ? 'bg-pink-100 ring-2 ring-pink-500' : 'bg-slate-50 hover:bg-slate-100'
+                      }`}
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">Descrição do Momento</label>
+                <textarea
+                  rows={3}
+                  value={newAchievement.desc}
+                  onChange={e => setNewAchievement({ ...newAchievement, desc: e.target.value })}
+                  placeholder="Como aconteceu, quem estava presente, qual foi a reação positiva..."
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-600 block mb-1">URL da Foto de Recordação (Opcional)</label>
+                <input
+                  type="text"
+                  value={newAchievement.photoUrl}
+                  onChange={e => setNewAchievement({ ...newAchievement, photoUrl: e.target.value })}
+                  placeholder="https://..."
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-sans"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAchievementModal(false)}
+                  className="blob-button bg-slate-100 text-slate-700 w-1/2 !py-2.5 text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="blob-button bg-pink-500 text-white w-1/2 !py-2.5 text-xs font-bold shadow-md shadow-pink-500/20"
+                >
+                  Celebrar Marco 🎉
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: RESET TOTAL / DEIXAR TUDO EM BRANCO */}
+      {/* ========================================================================= */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-rose-600">
+                <Trash2 className="w-5 h-5" />
+                <h3 className="text-xl font-black font-kids text-slate-900">Deixar Tudo em Branco?</h3>
+              </div>
+              <button onClick={() => setShowResetModal(false)} className="p-1 rounded-full text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 text-xs text-rose-800 leading-relaxed mb-4">
+              <p className="font-bold mb-1">Atenção:</p>
+              <p>
+                Esta ação apagará todos os dados pré-preenchidos e de demonstração (atendimentos, metas PEI, agenda, documentos, conquistas, fotos e diário), limpando os campos cadastrais da criança para que você possa preencher tudo completamente do zero.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowResetModal(false)}
+                className="blob-button bg-slate-100 text-slate-700 w-1/2 !py-2.5 text-xs font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleResetAllDataToBlank}
+                className="blob-button bg-rose-600 hover:bg-rose-700 text-white w-1/2 !py-2.5 text-xs font-bold shadow-md shadow-rose-600/20"
+              >
+                Sim, Limpar Tudo
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -17,7 +17,8 @@ import {
   ChevronRight,
   RefreshCw,
   Tag,
-  Smile
+  Smile,
+  ArrowLeft
 } from 'lucide-react';
 import { DirectChannel, DirectMessage, SystemUser, UserRole } from '../types';
 import { 
@@ -52,6 +53,7 @@ export const InstantDirectChat: React.FC<InstantDirectChatProps> = ({
 }) => {
   const [channels, setChannels] = useState<DirectChannel[]>([]);
   const [selectedChannelId, setSelectedChannelId] = useState<string>('');
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [inputText, setInputText] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string>('');
@@ -121,12 +123,13 @@ export const InstantDirectChat: React.FC<InstantDirectChatProps> = ({
     if (channel.participantId === systemUser?.id) return true;
     if (userName.includes('karen') && channel.id === 'channel-karen') return true;
     if (userName.includes('barbara') && channel.id === 'channel-barbara') return true;
-    if (userName.includes('edinéia') || userName.includes('edineia') && channel.id === 'channel-edineia') return true;
+    if ((userName.includes('edinéia') || userName.includes('edineia')) && channel.id === 'channel-edineia') return true;
     if (userName.includes('marcelo') && channel.id === 'channel-marcelo') return true;
     if (userName.includes('juliana') && channel.id === 'channel-juliana') return true;
+    if (channel.id === `channel-${systemUser?.id}`) return true;
 
-    // If general therapist role without exact match, assign first matching therapist channel
-    if (userRole === 'therapist' && channel.participantRole === 'therapist') {
+    // Fallback: If no channel matched by name/ID, assign strictly the first matching therapist channel so they only ever see ONE channel
+    if (userRole === 'therapist' && channel.id === (channels.find(ch => ch.participantRole === 'therapist')?.id || 'channel-karen')) {
       return true;
     }
 
@@ -207,35 +210,35 @@ export const InstantDirectChat: React.FC<InstantDirectChatProps> = ({
   };
 
   return (
-    <div id="instant-direct-chat-module" className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col h-[750px]">
+    <div id="instant-direct-chat-module" className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col h-[620px] sm:h-[720px] max-h-[85vh]">
       {/* Top Header Bar */}
-      <div className="bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-700 px-6 py-4 text-white flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+      <div className="bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-700 px-4 sm:px-6 py-3 sm:py-4 text-white flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shrink-0">
             <MessageSquare className="w-5 h-5 text-sky-200" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-black tracking-tight font-kids">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm sm:text-base font-black tracking-tight font-kids truncate">
                 Mensagens Instantâneas Diretas
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-400 text-emerald-950 flex items-center gap-1">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-400 text-emerald-950 flex items-center gap-1 shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-800 animate-pulse"></span>
                 Tempo Real
               </span>
             </div>
-            <p className="text-xs text-sky-100/90 font-medium">
+            <p className="text-[11px] sm:text-xs text-sky-100/90 font-medium truncate sm:whitespace-normal">
               {canViewAllChannels 
-                ? 'Central dos Pais: Acesso exclusivo a todos os canais individuais com terapeutas e escola' 
+                ? 'Central dos Pais: Acesso aos canais individuais com terapeutas e escola' 
                 : 'Canal Individual Seguro e Confidencial com os Pais do Ian (Marcos & Alessandra)'}
             </p>
           </div>
         </div>
 
         {/* Security / Privacy Badge */}
-        <div className="flex items-center gap-2 bg-white/15 px-3 py-1.5 rounded-xl border border-white/20 text-xs font-bold">
+        <div className="hidden sm:flex items-center gap-1.5 bg-white/15 px-3 py-1 rounded-xl border border-white/20 text-xs font-bold shrink-0">
           <Lock className="w-3.5 h-3.5 text-amber-300" />
-          <span>Privacidade Individual Garantida</span>
+          <span>Privacidade Garantida</span>
         </div>
       </div>
 
@@ -243,7 +246,7 @@ export const InstantDirectChat: React.FC<InstantDirectChatProps> = ({
       <div className="flex-1 flex overflow-hidden">
         {/* Left Column: Channels List (Only available/expandable for Parents & Admin) */}
         {canViewAllChannels && (
-          <div className="w-80 border-r border-slate-200/80 bg-slate-50/50 flex flex-col shrink-0">
+          <div className={`${mobileView === 'chat' ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-slate-200/80 bg-slate-50/50 flex-col shrink-0`}>
             {/* Search filter */}
             <div className="p-3 border-b border-slate-200/70 bg-white">
               <div className="relative">
@@ -266,7 +269,10 @@ export const InstantDirectChat: React.FC<InstantDirectChatProps> = ({
                 return (
                   <button
                     key={channel.id}
-                    onClick={() => setSelectedChannelId(channel.id)}
+                    onClick={() => {
+                      setSelectedChannelId(channel.id);
+                      setMobileView('chat');
+                    }}
                     className={`w-full text-left p-3.5 flex items-start gap-3 transition-colors ${
                       isSelected 
                         ? 'bg-sky-50/90 border-l-4 border-sky-600 shadow-sm' 
@@ -322,44 +328,56 @@ export const InstantDirectChat: React.FC<InstantDirectChatProps> = ({
         )}
 
         {/* Right Column: Active Conversation Messages and Input */}
-        <div className="flex-1 flex flex-col bg-white">
+        <div className={`${canViewAllChannels && mobileView === 'list' ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-white overflow-hidden`}>
           {/* Active Channel Header */}
           {activeChannel ? (
-            <div className="px-6 py-3.5 border-b border-slate-200/80 bg-slate-50/70 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
+            <div className="px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-slate-200/80 bg-slate-50/70 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                {/* Mobile Back to Channels Button */}
+                {canViewAllChannels && (
+                  <button
+                    type="button"
+                    onClick={() => setMobileView('list')}
+                    className="md:hidden p-1.5 -ml-1 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center shrink-0 shadow-2xs"
+                    title="Voltar aos Canais"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                )}
+
                 {activeChannel.participantAvatar ? (
                   <img 
                     src={activeChannel.participantAvatar} 
                     alt={activeChannel.participantName}
-                    className="w-10 h-10 rounded-2xl object-cover border border-slate-200 shadow-xs" 
+                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl object-cover border border-slate-200 shadow-xs shrink-0" 
                   />
                 ) : (
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold ${
+                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 ${
                     activeChannel.participantRole === 'school' ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-800'
                   }`}>
-                    {activeChannel.participantRole === 'school' ? <GraduationCap className="w-5 h-5" /> : <Stethoscope className="w-5 h-5" />}
+                    {activeChannel.participantRole === 'school' ? <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5" /> : <Stethoscope className="w-4 h-4 sm:w-5 sm:h-5" />}
                   </div>
                 )}
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-slate-900">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
                       {activeChannel.participantName}
                     </h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">
+                    <span className="px-1.5 sm:px-2 py-0.2 rounded-full text-[9px] sm:text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200 shrink-0">
                       {activeChannel.participantRoleTitle}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                    <span>Canal individual com</span>
-                    <strong className="text-slate-700">Marcos & Alessandra Paterra (Pais do Ian)</strong>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 flex items-center gap-1 truncate">
+                    <span>Com</span>
+                    <strong className="text-slate-700 truncate">Marcos & Alessandra (Pais)</strong>
                   </p>
                 </div>
               </div>
 
               {/* Individual isolation indicator */}
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold shrink-0">
                 <Lock className="w-3.5 h-3.5 text-amber-600" />
-                <span>Restrito aos Pais e ao Profissional</span>
+                <span>Restrito aos Pais e Profissional</span>
               </div>
             </div>
           ) : (
@@ -451,7 +469,7 @@ export const InstantDirectChat: React.FC<InstantDirectChatProps> = ({
           </div>
 
           {/* Quick Tag Pills */}
-          <div className="px-6 pt-2 pb-1 border-t border-slate-100 bg-white flex items-center gap-1.5 overflow-x-auto text-[11px]">
+          <div className="px-3 sm:px-6 pt-2 pb-1 border-t border-slate-100 bg-white flex items-center gap-1.5 overflow-x-auto text-[11px] scrollbar-none">
             <span className="text-slate-400 font-bold shrink-0 text-[10px] uppercase mr-1">Etiqueta:</span>
             {QUICK_TAGS.map((tag) => (
               <button
@@ -470,7 +488,7 @@ export const InstantDirectChat: React.FC<InstantDirectChatProps> = ({
           </div>
 
           {/* Message Input Box */}
-          <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-slate-200/80 flex items-center gap-3">
+          <form onSubmit={handleSendMessage} className="p-2.5 sm:p-4 bg-white border-t border-slate-200/80 flex items-center gap-2 sm:gap-3">
             <div className="flex-1 relative">
               <input
                 type="text"
@@ -481,10 +499,10 @@ export const InstantDirectChat: React.FC<InstantDirectChatProps> = ({
                     ? `Responder a ${activeChannel?.participantName || 'profissional'}...` 
                     : "Mensagem direta para os Pais do Ian (Marcos & Alessandra)..."
                 }
-                className="w-full pl-4 pr-10 py-3 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition-all text-slate-800"
+                className="w-full pl-3.5 sm:pl-4 pr-10 py-2.5 sm:py-3 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition-all text-slate-800"
               />
               {selectedTag && (
-                <span className="absolute right-3 top-3 px-2 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-800">
+                <span className="absolute right-3 top-2.5 sm:top-3 px-2 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-800">
                   {selectedTag}
                 </span>
               )}
@@ -493,14 +511,14 @@ export const InstantDirectChat: React.FC<InstantDirectChatProps> = ({
             <button
               type="submit"
               disabled={!inputText.trim() || isSending}
-              className={`px-5 py-3 rounded-2xl font-bold text-xs flex items-center gap-2 transition-all ${
+              className={`px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl font-bold text-xs flex items-center gap-1.5 sm:gap-2 transition-all shrink-0 ${
                 inputText.trim() && !isSending
                   ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/25 hover:from-sky-600 hover:to-indigo-700 cursor-pointer active:scale-95'
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed'
               }`}
             >
               <span>Enviar</span>
-              <Send className="w-4 h-4" />
+              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </form>
         </div>

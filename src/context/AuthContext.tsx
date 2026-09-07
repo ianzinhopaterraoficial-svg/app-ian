@@ -87,16 +87,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           if (userDocSnap.exists()) {
             const data = userDocSnap.data() as SystemUser;
+            const email = currentUser.email?.toLowerCase() || '';
+            const isEmailAdmin = ADMIN_EMAILS.some(adminEmail => email === adminEmail.toLowerCase() || email.includes('marcospaterra') || email.includes('ianzinho'));
+            if (isEmailAdmin && data.role !== 'admin') {
+              data.role = 'admin';
+              data.roleTitle = 'Pai do Ian & Administrador';
+            }
             setSystemUser(data);
             try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data)); } catch {}
           } else {
             // Determine default role based on email or admin check
             const email = currentUser.email?.toLowerCase() || '';
-            const isAdmin = ADMIN_EMAILS.some(adminEmail => email.includes('marcospaterra') || email === adminEmail);
+            const isAdmin = ADMIN_EMAILS.some(adminEmail => email.includes('marcospaterra') || email.includes('ianzinho') || email === adminEmail.toLowerCase());
             
             const newSystemUser: SystemUser = {
               id: currentUser.uid,
-              name: currentUser.displayName || (email.includes('marcos') ? 'Marcos Paterra (Pai)' : 'Usuário Mundo Azul'),
+              name: currentUser.displayName || (email.includes('marcos') || email.includes('ianzinho') ? 'Marcos Paterra (Pai do Ian)' : 'Usuário Mundo Azul'),
               email: currentUser.email || '',
               role: isAdmin ? 'admin' : 'parent',
               roleTitle: isAdmin ? 'Pai do Ian & Administrador' : 'Família / Responsável',
@@ -109,6 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } catch (err) {
               handleFirestoreError(err, OperationType.WRITE, `users/${currentUser.uid}`);
             }
+
             setSystemUser(newSystemUser);
             try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newSystemUser)); } catch {}
           }
@@ -291,7 +298,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const currentRole = systemUser?.role;
-  const isAdmin = currentRole === 'admin';
+  const userEmail = (user?.email || systemUser?.email || '').toLowerCase();
+  const isAdmin = currentRole === 'admin' || ADMIN_EMAILS.some(ae => userEmail === ae.toLowerCase() || userEmail.includes('marcospaterra') || userEmail.includes('ianzinho'));
   const isParent = currentRole === 'parent' || isAdmin;
   const isTherapist = currentRole === 'therapist' || isAdmin;
   const isSchool = currentRole === 'school' || isAdmin;

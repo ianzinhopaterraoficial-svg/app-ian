@@ -171,11 +171,9 @@ export const MomentsGallery: React.FC<MomentsGalleryProps> = ({
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('Tem certeza que deseja remover esta foto da galeria?')) {
-      await onDeleteMoment(id);
-      if (selectedMoment?.id === id) {
-        setSelectedMoment(null);
-      }
+    await onDeleteMoment(id);
+    if (selectedMoment?.id === id) {
+      setSelectedMoment(null);
     }
   };
 
@@ -283,7 +281,7 @@ export const MomentsGallery: React.FC<MomentsGalleryProps> = ({
         </div>
 
         {/* Search Field */}
-        <div className="relative min-w-[240px]">
+        <div className="relative w-full md:w-64">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"

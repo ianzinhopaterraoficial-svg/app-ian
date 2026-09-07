@@ -28,10 +28,16 @@ function MainContent() {
   return (
     <div className="relative min-h-screen">
       {/* Quick view switcher toggle pill */}
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-white/90 backdrop-blur-md p-1.5 rounded-full shadow-lg border border-sky-200">
+      <div 
+        id="quick-view-switcher"
+        className="flex fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] right-3 sm:bottom-6 sm:right-6 z-50 items-center gap-1.5 sm:gap-2 bg-white/95 backdrop-blur-md p-1 sm:p-1.5 rounded-full shadow-xl border border-sky-200 hover:shadow-2xl transition-all"
+        style={{
+          bottom: 'max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem))',
+        }}
+      >
         <button
           onClick={() => setView('site')}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold font-kids transition-all ${
+          className={`flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-bold font-kids transition-all ${
             view === 'site' 
               ? 'bg-sky-500 text-white shadow-sm' 
               : 'text-slate-600 hover:text-slate-900'
@@ -43,7 +49,7 @@ function MainContent() {
 
         <button
           onClick={handleOpenApp}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold font-kids transition-all ${
+          className={`flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-bold font-kids transition-all ${
             view === 'app' 
               ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-sm' 
               : 'text-slate-600 hover:text-slate-900'

@@ -7,9 +7,14 @@ service cloud.firestore {
       return request.auth != null;
     }
     
-    // Helper to get current user document
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    // Safe helper to check if user profile document exists
+    function hasUserDoc() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Helper to get current user document safely
+    function getUserRole() {
+      return hasUserDoc() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role : '';
     }
     
     // Helper to check admin role (supports Auth Custom Claims 'role: admin', 'admin: true', Firestore user doc, and root emails)
@@ -17,7 +22,7 @@ service cloud.firestore {
       return isAuthenticated() && (
         request.auth.token.role == 'admin' ||
         request.auth.token.admin == true ||
-        getUserData().role == 'admin' ||
+        getUserRole() == 'admin' ||
         request.auth.token.email == 'ianzinhopaterraoficial@gmail.com' ||
         request.auth.token.email == 'vmpveiculos@gmail.com' ||
         request.auth.token.email == 'marcospaterra31@gmail.com' ||
@@ -33,7 +38,7 @@ service cloud.firestore {
     function isParent() {
       return isAuthenticated() && (
         request.auth.token.role == 'parent' ||
-        getUserData().role == 'parent' || 
+        getUserRole() == 'parent' || 
         isAdmin()
       );
     }
@@ -41,7 +46,7 @@ service cloud.firestore {
     function isTherapist() {
       return isAuthenticated() && (
         request.auth.token.role == 'therapist' ||
-        getUserData().role == 'therapist' || 
+        getUserRole() == 'therapist' || 
         isAdmin()
       );
     }
@@ -49,7 +54,7 @@ service cloud.firestore {
     function isSchool() {
       return isAuthenticated() && (
         request.auth.token.role == 'school' ||
-        getUserData().role == 'school' || 
+        getUserRole() == 'school' || 
         isAdmin()
       );
     }

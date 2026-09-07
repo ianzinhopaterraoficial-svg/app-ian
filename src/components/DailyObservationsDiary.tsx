@@ -5,6 +5,7 @@ import {
   addDoc, 
   deleteDoc, 
   doc, 
+  setDoc,
   onSnapshot, 
   query, 
   orderBy,
@@ -28,6 +29,7 @@ import {
   Utensils, 
   Activity, 
   Trash2, 
+  Pencil,
   X, 
   RefreshCw, 
   AlertCircle, 
@@ -66,16 +68,17 @@ export const DailyObservationsDiary: React.FC<DailyObservationsDiaryProps> = ({
   // Modal State
   const [showModal, setShowModal] = useState<boolean>(false);
   const [savingRecord, setSavingRecord] = useState<boolean>(false);
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
 
-  // Form State
+  // Form State - start blank
   const [formDate, setFormDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [formAuthorName, setFormAuthorName] = useState<string>('');
   const [formAuthorRole, setFormAuthorRole] = useState<UserRole>('parent');
   const [formAuthorTitle, setFormAuthorTitle] = useState<string>('');
   const [formCategory, setFormCategory] = useState<DiaryRecord['category']>('geral');
   const [formHumor, setFormHumor] = useState<DiaryRecord['humor']>('radiante');
-  const [formSono, setFormSono] = useState<string>('Boa noite de sono contínuo');
-  const [formAlimentacao, setFormAlimentacao] = useState<string>('Aceitação positiva das refeições');
+  const [formSono, setFormSono] = useState<string>('');
+  const [formAlimentacao, setFormAlimentacao] = useState<string>('');
   const [formAtividades, setFormAtividades] = useState<string>('');
   const [formConquista, setFormConquista] = useState<string>('');
   const [formObs, setFormObs] = useState<string>('');
@@ -108,36 +111,35 @@ export const DailyObservationsDiary: React.FC<DailyObservationsDiaryProps> = ({
       unsubscribe = onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            const loaded = snapshot.docs.map((d) => ({
-              id: d.id,
-              ...d.data(),
-            })) as DiaryRecord[];
-            setRecords(loaded);
-            setSyncStatus('synced');
-            try {
-              localStorage.setItem(LOCAL_STORAGE_DIARY_KEY, JSON.stringify(loaded));
-            } catch {
-              // ignore
-            }
-          } else {
-            // If empty in Firestore, retain seed or local storage
-            try {
-              const cached = localStorage.getItem(LOCAL_STORAGE_DIARY_KEY);
-              if (cached) {
-                setRecords(JSON.parse(cached));
-              } else {
-                setRecords(initialDiary);
-              }
-            } catch {
-              setRecords(initialDiary);
-            }
-            setSyncStatus('synced');
+          const loaded = snapshot.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+          })) as DiaryRecord[];
+          setRecords(loaded);
+          setSyncStatus('synced');
+          try {
+            localStorage.setItem(LOCAL_STORAGE_DIARY_KEY, JSON.stringify(loaded));
+          } catch {
+            // ignore
           }
           setLoading(false);
         },
         (error) => {
           console.warn('Firestore real-time subscription error:', error.message);
+          try {
+            const cached = localStorage.getItem(LOCAL_STORAGE_DIARY_KEY);
+            if (cached) {
+              setRecords(JSON.parse(cached));
+            } else {
+              setRecords([]);
+            }
+          } catch {
+            setRecords([]);
+          }
+          setSyncStatus('local');
+          setLoading(false);
+        }
+      );
           handleFirestoreError(error, OperationType.LIST, 'diary');
           setSyncStatus('local');
           // Load fallback from localStorage
@@ -195,34 +197,61 @@ export const DailyObservationsDiary: React.FC<DailyObservationsDiaryProps> = ({
   };
 
   const handleOpenNewEntryModal = (rolePreset?: UserRole) => {
+    setEditingRecordId(null);
     const role = rolePreset || (systemUser?.role || (isTherapist ? 'therapist' : 'parent'));
     setFormAuthorRole(role);
 
     if (role === 'therapist') {
-      setFormAuthorName(systemUser?.role === 'therapist' ? systemUser.name : 'Dra. Karen Camargo');
-      setFormAuthorTitle(systemUser?.role === 'therapist' ? systemUser.roleTitle : 'Neuropediatra (Equipe Clínica)');
+      setFormAuthorName(systemUser?.role === 'therapist' ? (systemUser.name || '') : '');
+      setFormAuthorTitle(systemUser?.role === 'therapist' ? (systemUser.roleTitle || '') : 'Terapeuta Multidisciplinar');
       setFormCategory('comunicacao');
-      setFormTags(['Terapia', 'Evolução Clínica', 'Comunicação']);
+      setFormTags(['Terapia']);
     } else if (role === 'school') {
-      setFormAuthorName(systemUser?.role === 'school' ? systemUser.name : 'Profª Mariana');
-      setFormAuthorTitle(systemUser?.role === 'school' ? systemUser.roleTitle : 'Escola Reino das Letras');
+      setFormAuthorName(systemUser?.role === 'school' ? (systemUser.name || '') : '');
+      setFormAuthorTitle(systemUser?.role === 'school' ? (systemUser.roleTitle || '') : 'Escola Reino das Letras');
       setFormCategory('rotina');
-      setFormTags(['Pedagógico', 'Socialização']);
+      setFormTags(['Pedagógico']);
     } else {
-      setFormAuthorName(systemUser?.role === 'parent' ? systemUser.name : 'Marcos & Alessandra Paterra');
+      setFormAuthorName(systemUser?.role === 'parent' ? (systemUser.name || '') : '');
       setFormAuthorTitle('Pais do Ian (Família)');
       setFormCategory('rotina');
-      setFormTags(['Rotina de Casa', 'Sono Regulado']);
+      setFormTags(['Rotina']);
     }
 
     setFormDate(new Date().toISOString().split('T')[0]);
     setFormHumor('radiante');
-    setFormSono('8 a 9 horas de sono tranquilo');
-    setFormAlimentacao('Almoço e café aceitos normalmente');
+    setFormSono('');
+    setFormAlimentacao('');
     setFormAtividades('');
     setFormConquista('');
     setFormObs('');
     setFormOrientacoes('');
+    setErrorMessage(null);
+    setShowModal(true);
+  };
+
+  const handleEditRecord = (rec: DiaryRecord) => {
+    setEditingRecordId(rec.id);
+    let rawDate = rec.date;
+    if (rawDate && rawDate.includes('/')) {
+      const parts = rawDate.split('/');
+      if (parts.length === 3) {
+        rawDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+    }
+    setFormDate(rawDate || new Date().toISOString().split('T')[0]);
+    setFormAuthorName(rec.authorName || '');
+    setFormAuthorRole(rec.authorRole || 'parent');
+    setFormAuthorTitle(rec.authorRoleTitle || '');
+    setFormCategory(rec.category || 'geral');
+    setFormHumor(rec.humor || 'radiante');
+    setFormSono(rec.sono || '');
+    setFormAlimentacao(rec.alimentacao || '');
+    setFormAtividades(rec.atividades || '');
+    setFormConquista(rec.conquista || '');
+    setFormObs(rec.obs || '');
+    setFormOrientacoes(rec.orientacoes || '');
+    setFormTags(rec.tags || []);
     setErrorMessage(null);
     setShowModal(true);
   };
@@ -265,6 +294,40 @@ export const DailyObservationsDiary: React.FC<DailyObservationsDiaryProps> = ({
       createdAt: new Date().toISOString()
     };
 
+    if (editingRecordId) {
+      try {
+        const diaryRef = doc(db, 'diary', editingRecordId);
+        await setDoc(diaryRef, {
+          ...newEntry,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        const updated = records.map(r => r.id === editingRecordId ? { ...r, ...newEntry, id: editingRecordId } : r);
+        setRecords(updated);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_DIARY_KEY, JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        setSyncStatus('synced');
+      } catch (err: any) {
+        console.warn('Firestore update failed, updating local fallback:', err);
+        const updated = records.map(r => r.id === editingRecordId ? { ...r, ...newEntry, id: editingRecordId } : r);
+        setRecords(updated);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_DIARY_KEY, JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+      } finally {
+        setSavingRecord(false);
+        setShowModal(false);
+        setEditingRecordId(null);
+        triggerCelebration();
+      }
+      return;
+    }
+
     try {
       // 1. Attempt Firestore write
       const docRef = await addDoc(collection(db, 'diary'), {
@@ -303,17 +366,11 @@ export const DailyObservationsDiary: React.FC<DailyObservationsDiaryProps> = ({
     }
   };
 
-  const handleDeleteRecord = async (id: string, authorName?: string) => {
-    if (!window.confirm(`Deseja realmente excluir esta observação registrada por ${authorName || 'usuário'}?`)) {
-      return;
-    }
-
+  const handleDeleteRecord = async (id: string) => {
     try {
-      if (!id.startsWith('local-') && !id.startsWith('diary-')) {
-        await deleteDoc(doc(db, 'diary', id));
-      }
+      await deleteDoc(doc(db, 'diary', id));
     } catch (err) {
-      console.warn('Firestore delete failed:', err);
+      console.warn('Firestore delete notice:', err);
       handleFirestoreError(err, OperationType.DELETE, `diary/${id}`);
     }
 
@@ -400,22 +457,36 @@ export const DailyObservationsDiary: React.FC<DailyObservationsDiaryProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-            <button
-              onClick={() => handleOpenNewEntryModal('parent')}
-              className="flex-1 sm:flex-initial py-2.5 px-4 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white text-xs font-bold font-kids shadow-md shadow-rose-500/20 flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Heart className="w-4 h-4 fill-current" />
-              <span>Registrar como Pais</span>
-            </button>
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+            {(isParent || isAdmin) && (
+              <button
+                onClick={() => handleOpenNewEntryModal('parent')}
+                className="w-full sm:w-auto py-2.5 px-4 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white text-xs font-bold font-kids shadow-md shadow-rose-500/20 flex items-center justify-center gap-1.5 transition-all"
+              >
+                <Heart className="w-4 h-4 fill-current" />
+                <span>Registrar como Pais</span>
+              </button>
+            )}
 
-            <button
-              onClick={() => handleOpenNewEntryModal('therapist')}
-              className="flex-1 sm:flex-initial py-2.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white text-xs font-bold font-kids shadow-md shadow-sky-500/20 flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Stethoscope className="w-4 h-4" />
-              <span>Registrar como Terapeuta</span>
-            </button>
+            {(isTherapist || isAdmin) && (
+              <button
+                onClick={() => handleOpenNewEntryModal('therapist')}
+                className="w-full sm:w-auto py-2.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white text-xs font-bold font-kids shadow-md shadow-sky-500/20 flex items-center justify-center gap-1.5 transition-all"
+              >
+                <Stethoscope className="w-4 h-4" />
+                <span>Registrar como Terapeuta</span>
+              </button>
+            )}
+
+            {(isSchool || isAdmin) && (
+              <button
+                onClick={() => handleOpenNewEntryModal('school')}
+                className="w-full sm:w-auto py-2.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold font-kids shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5 transition-all"
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span>Registrar como Escola</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -496,7 +567,7 @@ export const DailyObservationsDiary: React.FC<DailyObservationsDiaryProps> = ({
         </div>
 
         {/* Category & Search Input */}
-        <div className="flex items-center gap-2 flex-1 md:justify-end">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 md:justify-end">
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
@@ -631,13 +702,22 @@ export const DailyObservationsDiary: React.FC<DailyObservationsDiaryProps> = ({
                     </div>
 
                     {(isAdmin || isParent || user?.uid === rec.authorId) && (
-                      <button
-                        onClick={() => handleDeleteRecord(rec.id, rec.authorName)}
-                        className="p-1.5 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        title="Excluir observação"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleEditRecord(rec)}
+                          className="p-1.5 rounded-xl text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors"
+                          title="Editar observação"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRecord(rec.id)}
+                          className="p-1.5 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Excluir observação"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -767,9 +847,11 @@ export const DailyObservationsDiary: React.FC<DailyObservationsDiaryProps> = ({
                 <span className="text-white/80 text-xs">• Sincronizado no Firestore</span>
               </div>
 
-              <h3 className="text-2xl font-black font-kids">Nova Observação do {childName}</h3>
+              <h3 className="text-2xl font-black font-kids">
+                {editingRecordId ? 'Editar Observação' : `Nova Observação do ${childName}`}
+              </h3>
               <p className="text-white/80 text-xs mt-0.5">
-                Compartilhe o progresso diário, sinais de regulação, sono e conquistas.
+                {editingRecordId ? 'Atualize as anotações e informações registradas.' : 'Compartilhe o progresso diário, sinais de regulação, sono e conquistas.'}
               </p>
             </div>
 
@@ -1103,7 +1185,7 @@ export const DailyObservationsDiary: React.FC<DailyObservationsDiaryProps> = ({
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Publicar Observação</span>
+                      <span>{editingRecordId ? 'Salvar Alterações' : 'Publicar Observação'}</span>
                     </>
                   )}
                 </button>
